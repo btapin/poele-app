@@ -235,7 +235,15 @@ function toast(msg) {
 function banner(msg) {
   $("banner").classList.toggle("show", !!msg);
   $("bannerTxt").textContent = msg || "";
-  ["btnOn", "btnOff", "btnRefresh"].forEach(id => $(id).disabled = !!msg);
+  majBoutons();
+}
+/* Allumer grisé si le poêle tourne déjà, Éteindre grisé s'il est déjà éteint */
+function majBoutons() {
+  const occupe = $("banner").classList.contains("show");
+  const eteint = dernierEtat ? dernierEtat.eteint : null;
+  $("btnOn").disabled = occupe || eteint === false;
+  $("btnOff").disabled = occupe || eteint === true;
+  $("btnRefresh").disabled = occupe;
 }
 
 /* ---------- Affichage de l'état ---------- */
@@ -259,6 +267,7 @@ function afficher(e) {
   $("consigne").textContent = `${fmt(e.consigne)} °C`;
   $("maj").textContent = `Relevé ${depuis(e.horodatage)}`;
   $("derniere").textContent = e.action ? `Dernière décision : ${e.action}` : "";
+  majBoutons();
   if (e.nom) { $("nom").textContent = `Poêle · ${e.nom}`; document.title = `Poêle · ${e.nom}`; }
 }
 
