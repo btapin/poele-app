@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16130f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Poêle</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316130f'/%3E%3Cpath d='M32 10c4 9 14 15 14 28a14 14 0 0 1-28 0c0-7 4-11 7-14 0 5 2 8 5 9-2-8 0-16 2-23z' fill='%23ff7a2f'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #16130f; --card: #211c17; --card2: #2a241e; --line: #3a3229;
+    --text: #f4ede4; --muted: #a8998a; --fire: #ff7a2f; --fire2: #ffb347;
+    --cold: #6fb7ff; --ok: #5fcf8a; --bad: #ff6b6b;
+    --r: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 18px 16px calc(32px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; justify-content: space-between; margin: 4px 2px 16px; }
+  header h1 { font-size: 22px; margin: 0; letter-spacing: .2px; }
+  header small { color: var(--muted); display: block; font-size: 13px; }
+  .icon-btn { background: var(--card); border: 1px solid var(--line); color: var(--text);
+    width: 42px; height: 42px; border-radius: 12px; font-size: 20px; cursor: pointer; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted);
+    margin: 0 0 12px; font-weight: 600; }
+
+  /* État */
+  .hero { position: relative; overflow: hidden; }
+  .hero.on { background: radial-gradient(120% 90% at 85% 0%, rgba(255,122,47,.28), transparent 60%), var(--card); }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    background: var(--card2); font-weight: 600; font-size: 14px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .on .dot { background: var(--fire); box-shadow: 0 0 10px var(--fire); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .temps { display: flex; align-items: flex-end; gap: 22px; margin: 18px 0 6px; }
+  .big { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -2px; }
+  .big sup { font-size: 24px; letter-spacing: 0; font-weight: 600; color: var(--muted); }
+  .sub { color: var(--muted); font-size: 14px; }
+  .sub b { color: var(--text); font-size: 18px; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  button.main { border: 0; border-radius: 14px; padding: 15px 10px; font-size: 16px; font-weight: 700;
+    cursor: pointer; color: #1a120b; }
+  .b-on { background: linear-gradient(135deg, var(--fire2), var(--fire)); }
+  .b-off { background: var(--card2); color: var(--text) !important; border: 1px solid var(--line) !important; }
+  .b-refresh { grid-column: 1 / -1; background: transparent; color: var(--muted) !important;
+    border: 1px dashed var(--line) !important; font-weight: 600 !important; padding: 11px !important; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  .banner { display: none; margin-top: 14px; padding: 10px 12px; border-radius: 12px; font-size: 14px;
+    background: var(--card2); align-items: center; gap: 10px; }
+  .banner.show { display: flex; }
+  .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line);
+    border-top-color: var(--fire); animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Mode auto */
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .switch { position: relative; width: 52px; height: 30px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--card2); border: 1px solid var(--line);
+    border-radius: 999px; transition: .2s; cursor: pointer; }
+  .slider::before { content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px;
+    background: var(--muted); border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: rgba(95,207,138,.25); border-color: var(--ok); }
+  .switch input:checked + .slider::before { transform: translateX(22px); background: var(--ok); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  label.f { display: block; font-size: 13px; color: var(--muted); }
+  label.f span.ic { margin-right: 4px; }
+  .stepper { display: flex; align-items: center; margin-top: 6px; background: var(--card2);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stepper button { width: 40px; height: 44px; border: 0; background: transparent; color: var(--text);
+    font-size: 20px; cursor: pointer; }
+  .stepper output { flex: 1; text-align: center; font-weight: 700; font-size: 17px; }
+  input[type=time], input[type=text], input[type=password] { width: 100%; margin-top: 6px; padding: 11px 12px;
+    background: var(--card2); border: 1px solid var(--line); border-radius: 12px; color: var(--text);
+    font: inherit; font-weight: 600; }
+  input[type=time] { color-scheme: dark; }
+  .save { width: 100%; margin-top: 14px; padding: 13px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card2); color: var(--text); font-weight: 700; font-size: 15px; cursor: pointer; }
+  .save.dirty { background: var(--text); color: var(--bg); }
+  .hint { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+
+  /* Activité */
+  ul.runs { list-style: none; margin: 0; padding: 0; }
+  ul.runs li { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line);
+    font-size: 14px; }
+  ul.runs li:first-child { border-top: 0; }
+  .ri { width: 22px; text-align: center; flex: none; }
+  .rt { flex: 1; }
+  .rd { color: var(--muted); font-size: 13px; }
+
+  /* Réglages */
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--r);
+    width: min(92vw, 440px); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h2 { margin: 0 0 6px; font-size: 18px; }
+  dialog label.f { margin-top: 12px; }
+  .drow { display: flex; gap: 10px; margin-top: 16px; }
+  .drow button { flex: 1; }
+  .err { color: var(--bad); }
+  .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(120px);
+    background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 12px; font-weight: 600;
+    font-size: 14px; transition: .25s; max-width: 90vw; z-index: 10; opacity: 0; visibility: hidden; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
+  .welcome p { color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 id="nom">Poêle</h1>
+      <small>Pilotage à distance</small>
+    </div>
+    <button class="icon-btn" id="btnSettings" aria-label="Réglages">⚙︎</button>
+  </header>
+
+  <section class="card welcome" id="welcome" hidden>
+    <h2>Bienvenue</h2>
+    <p>Pour commencer, saisis le jeton d'accès GitHub qu'on t'a donné. Il est enregistré uniquement sur ce téléphone.</p>
+    <button class="main b-on" style="width:100%" id="btnWelcome">Saisir le jeton</button>
+  </section>
+
+  <div id="app" hidden>
+    <section class="card hero" id="hero">
+      <span class="pill"><span class="dot"></span><span id="etat">—</span></span>
+      <div class="temps">
+        <div class="big" id="temp">--<sup>°C</sup></div>
+        <div class="sub">Consigne<br><b id="consigne">--</b></div>
+      </div>
+      <div class="meta" id="maj">Pas encore de relevé</div>
+      <div class="meta" id="derniere"></div>
+
+      <div class="actions">
+        <button class="main b-on" id="btnOn">🔥 Allumer</button>
+        <button class="main b-off" id="btnOff">⏻ Éteindre</button>
+        <button class="main b-refresh" id="btnRefresh">↻ Relever la température maintenant</button>
+      </div>
+      <div class="banner" id="banner"><span class="spinner"></span><span id="bannerTxt"></span></div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <div>
+          <h2 style="margin:0">Mode automatique</h2>
+          <div class="sub" id="autoTxt">Chargement…</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="auto"><span class="slider"></span></label>
+      </div>
+
+      <div class="grid2">
+        <label class="f"><span class="ic">🔥</span>Allumer sous
+          <div class="stepper"><button data-t="min" data-d="-0.5">−</button><output id="vmin">18</output><button data-t="min" data-d="0.5">+</button></div>
+        </label>
+        <label class="f"><span class="ic">❄︎</span>Éteindre au-dessus de
+          <div class="stepper"><button data-t="max" data-d="-0.5">−</button><output id="vmax">20</output><button data-t="max" data-d="0.5">+</button></div>
+        </label>
+        <label class="f">De<input type="time" id="debut" value="06:30"></label>
+        <label class="f">À<input type="time" id="fin" value="22:00"></label>
+      </div>
+      <button class="save" id="btnSave">Enregistrer les réglages</button>
+      <p class="hint">Vérification toutes les 30 min. Le poêle est éteint à l'heure de fin. Plage possible : entre 6h et 22h30.</p>
+    </section>
+
+    <section class="card">
+      <h2>Activité récente</h2>
+      <ul class="runs" id="runs"><li class="rd">Chargement…</li></ul>
+    </section>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <h2>Réglages</h2>
+  <div class="sub">Enregistrés uniquement sur cet appareil.</div>
+  <label class="f">Dépôt GitHub (pseudo/dépôt)<input type="text" id="repo" placeholder="btapin/Po-le" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+  <label class="f">Jeton d'accès<input type="password" id="token" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+  <div class="sub err" id="dlgErr"></div>
+  <div class="drow">
+    <button class="save" id="btnForget" type="button">Oublier</button>
+    <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const WF = "poele.yml";
+const DEFAUTS = { TEMP_MIN: "18", TEMP_MAX: "20", HEURE_DEBUT: "06:30", HEURE_FIN: "22:00" };
+
+/* ---------- Stockage local (protégé) ---------- */
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ""; } catch { return mem[k] || ""; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { mem[k] = v; } },
+  del(k) { try { localStorage.removeItem(k); } catch { delete mem[k]; } },
+};
+const mem = {};
+let cfg = { repo: store.get("poele.repo") || "btapin/Po-le", token: store.get("poele.token") };
+
+/* ---------- API GitHub ---------- */
+async function gh(path, opts = {}) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.repo}${path}`, {
+    cache: "no-store",
+    ...opts,
+    headers: {
+      "Accept": opts.raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
+      "Authorization": `Bearer ${cfg.token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
+  if (res.status === 401) throw new Error("Jeton refusé : vérifie-le dans les réglages ⚙︎");
+  if (res.status === 403) throw new Error("Le jeton n'a pas les bonnes autorisations");
+  if (!res.ok && res.status !== 404) throw new Error(`Erreur GitHub ${res.status}`);
+  if (res.status === 404) { const e = new Error("introuvable"); e.notFound = true; throw e; }
+  if (res.status === 204 || res.status === 201) return null;
+  return opts.raw ? res.text() : res.json();
+}
+
+/* ---------- Toast & bannière ---------- */
+let toastT;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 3200);
+}
+function banner(msg) {
+  $("banner").classList.toggle("show", !!msg);
+  $("bannerTxt").textContent = msg || "";
+  ["btnOn", "btnOff", "btnRefresh"].forEach(id => $(id).disabled = !!msg);
+}
+
+/* ---------- Affichage de l'état ---------- */
+function depuis(iso) {
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (min < 1) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `il y a ${h} h ${String(min % 60).padStart(2, "0")}`;
+  return new Date(iso).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+}
+const fmt = v => v === null || v === undefined || v === "" ? "--" : String(v).replace(".", ",");
+let dernierEtat = null;
+
+function afficher(e) {
+  dernierEtat = e;
+  const on = e.eteint === false;
+  $("hero").classList.toggle("on", on);
+  $("etat").textContent = e.eteint === true ? "Éteint" : on ? `En marche · ${e.etat}` : (e.etat || "Inconnu");
+  $("temp").innerHTML = `${fmt(e.temperature)}<sup>°C</sup>`;
+  $("consigne").textContent = `${fmt(e.consigne)} °C`;
+  $("maj").textContent = `Relevé ${depuis(e.horodatage)}`;
+  $("derniere").textContent = e.action ? `Dernière décision : ${e.action}` : "";
+  if (e.nom) { $("nom").textContent = `Poêle · ${e.nom}`; document.title = `Poêle · ${e.nom}`; }
+}
+
+async function chargerEtat() {
+  try {
+    const txt = await gh(`/contents/etat.json?ref=etat&t=${Date.now()}`, { raw: true });
+    const e = JSON.parse(txt);
+    afficher(e);
+    return e;
+  } catch (err) {
+    if (err.notFound) $("maj").textContent = "Pas encore de relevé : appuie sur « Relever »";
+    else throw err;
+  }
+}
+
+/* ---------- Commandes ---------- */
+async function commande(action, libelle) {
+  const avant = dernierEtat ? dernierEtat.horodatage : "";
+  banner(`${libelle}… (environ 30 à 60 s)`);
+  try {
+    await gh(`/actions/workflows/${WF}/dispatches`, {
+      method: "POST", body: JSON.stringify({ ref: "main", inputs: { action } }),
+    });
+    const fin = Date.now() + 150000;
+    while (Date.now() < fin) {
+      await new Promise(r => setTimeout(r, 6000));
+      const e = await chargerEtat().catch(() => null);
+      if (e && e.horodatage !== avant) { banner(""); toast("✓ Fait"); chargerRuns(); return; }
+    }
+    banner(""); toast("Toujours en cours… regarde l'activité dans un instant");
+    chargerRuns();
+  } catch (err) { banner(""); toast(err.message); }
+}
+
+/* ---------- Mode auto & réglages ---------- */
+const vals = { min: 18, max: 20 };
+let initial = {};
+function majSteppers() { $("vmin").textContent = fmt(vals.min); $("vmax").textContent = fmt(vals.max); verifierModif(); }
+function courant() {
+  return { TEMP_MIN: String(vals.min), TEMP_MAX: String(vals.max), HEURE_DEBUT: $("debut").value, HEURE_FIN: $("fin").value };
+}
+function verifierModif() {
+  const c = courant();
+  $("btnSave").classList.toggle("dirty", Object.keys(c).some(k => c[k] !== initial[k]));
+}
+document.querySelectorAll(".stepper button").forEach(b => b.addEventListener("click", ev => {
+  ev.preventDefault();
+  const t = b.dataset.t; vals[t] = Math.round((vals[t] + parseFloat(b.dataset.d)) * 2) / 2;
+  if (vals.min >= vals.max) { if (t === "min") vals.max = vals.min + 0.5; else vals.min = vals.max - 0.5; }
+  majSteppers();
+}));
+["debut", "fin"].forEach(id => $(id).addEventListener("input", verifierModif));
+
+async function chargerReglages() {
+  const lus = { ...DEFAUTS };
+  await Promise.all(Object.keys(DEFAUTS).map(async k => {
+    try { lus[k] = (await gh(`/actions/variables/${k}`)).value; } catch (e) { if (!e.notFound) throw e; }
+  }));
+  initial = lus;
+  vals.min = parseFloat(lus.TEMP_MIN.replace(",", ".")); vals.max = parseFloat(lus.TEMP_MAX.replace(",", "."));
+  $("debut").value = lus.HEURE_DEBUT; $("fin").value = lus.HEURE_FIN;
+  majSteppers();
+}
+
+async function enregistrerReglages() {
+  const c = courant();
+  if (!c.HEURE_DEBUT || !c.HEURE_FIN || c.HEURE_DEBUT >= c.HEURE_FIN) return toast("L'heure de début doit être avant l'heure de fin");
+  $("btnSave").disabled = true;
+  try {
+    for (const [k, v] of Object.entries(c)) {
+      if (v === initial[k]) continue;
+      await ecrireVariable(k, v);
+    }
+    initial = c; verifierModif(); toast("✓ Réglages enregistrés");
+  } catch (err) { toast(err.message); }
+  $("btnSave").disabled = false;
+}
+
+async function ecrireVariable(k, v) {
+  try {
+    await gh(`/actions/variables/${k}`, { method: "PATCH", body: JSON.stringify({ name: k, value: v }) });
+  } catch (e) {
+    if (!e.notFound) throw e;
+    await gh(`/actions/variables`, { method: "POST", body: JSON.stringify({ name: k, value: v }) });
+  }
+}
+function afficherAuto(actif) {
+  $("auto").checked = actif;
+  $("autoTxt").textContent = actif ? "Le thermostat surveille la température" : "Désactivé : le poêle ne s'allume plus tout seul";
+}
+async function chargerAuto() {
+  let v = "on";
+  try { v = (await gh(`/actions/variables/AUTO`)).value; } catch (e) { if (!e.notFound) throw e; }
+  afficherAuto(v.toLowerCase() !== "off");
+}
+$("auto").addEventListener("change", async () => {
+  const on = $("auto").checked;
+  try {
+    await ecrireVariable("AUTO", on ? "on" : "off");
+    afficherAuto(on);
+    toast(on ? "Mode automatique activé" : "Mode automatique désactivé");
+  } catch (err) { afficherAuto(!on); toast(err.message); }
+});
+
+/* ---------- Activité ---------- */
+async function chargerRuns() {
+  try {
+    const d = await gh(`/actions/workflows/${WF}/runs?per_page=6`);
+    const li = d.workflow_runs.map(r => {
+      const ic = r.status !== "completed" ? "⏳" : r.conclusion === "success" ? "✅" : r.conclusion === "cancelled" ? "⏹️" : "❌";
+      const qui = r.event === "schedule" ? "Vérification automatique" : "Commande manuelle";
+      return `<li><span class="ri">${ic}</span><span class="rt">${qui}</span><span class="rd">${depuis(r.created_at)}</span></li>`;
+    });
+    $("runs").innerHTML = li.join("") || `<li class="rd">Aucune activité</li>`;
+  } catch (err) { $("runs").innerHTML = `<li class="rd err">${err.message}</li>`; }
+}
+
+/* ---------- Réglages (jeton) ---------- */
+function ouvrirReglages() {
+  $("repo").value = cfg.repo; $("token").value = cfg.token; $("dlgErr").textContent = "";
+  $("dlg").showModal();
+}
+$("btnSettings").addEventListener("click", ouvrirReglages);
+$("btnWelcome").addEventListener("click", ouvrirReglages);
+$("btnDlgSave").addEventListener("click", async () => {
+  cfg = { repo: $("repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""), token: $("token").value.trim() };
+  $("dlgErr").textContent = "Vérification…";
+  try {
+    await gh(`/actions/workflows/${WF}`);
+    store.set("poele.repo", cfg.repo); store.set("poele.token", cfg.token);
+    $("dlg").close(); demarrer();
+  } catch (err) { $("dlgErr").textContent = err.notFound ? "Dépôt ou workflow introuvable" : err.message; }
+});
+$("btnForget").addEventListener("click", () => {
+  store.del("poele.token"); cfg.token = ""; $("dlg").close(); demarrer();
+});
+
+/* ---------- Démarrage ---------- */
+$("btnOn").addEventListener("click", () => commande("on", "Allumage en cours"));
+$("btnOff").addEventListener("click", () => commande("off", "Extinction en cours"));
+$("btnRefresh").addEventListener("click", () => commande("status", "Relevé en cours"));
+$("btnSave").addEventListener("click", enregistrerReglages);
+
+async function demarrer() {
+  const ok = !!cfg.token;
+  $("welcome").hidden = ok; $("app").hidden = !ok;
+  if (!ok) return;
+  try {
+    await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerRuns()]);
+  } catch (err) { toast(err.message); }
+}
+setInterval(() => { if (cfg.token && !$("banner").classList.contains("show")) { chargerEtat().catch(() => {}); chargerRuns(); } }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token) { chargerEtat().catch(() => {}); chargerRuns(); } });
+demarrer();
+</script>
+</body>
+</html>
