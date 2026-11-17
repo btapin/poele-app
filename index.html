@@ -474,7 +474,9 @@ function courant() {
 }
 function verifierModif() {
   const c = courant();
-  $("btnSave").classList.toggle("dirty", Object.keys(c).some(k => c[k] !== initial[k]));
+  const modif = Object.keys(c).some(k => c[k] !== initial[k]);
+  $("btnSave").classList.toggle("dirty", modif);
+  $("btnSave").disabled = !modif;
 }
 document.querySelectorAll(".stepper button[data-d]").forEach(b => b.addEventListener("click", ev => {
   ev.preventDefault();
@@ -510,7 +512,7 @@ async function enregistrerReglages() {
     initial = c; verifierModif(); toast("✓ Réglages enregistrés");
     if (changes.length) lancer("reglages", changes.join(" · ")).then(() => setTimeout(chargerHisto, 40000)).catch(() => {});
   } catch (err) { toast(err.message); }
-  $("btnSave").disabled = false;
+  verifierModif();
 }
 
 async function ecrireVariable(k, v) {
