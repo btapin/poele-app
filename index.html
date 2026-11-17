@@ -134,6 +134,13 @@
   .note { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
   .linkbtn { background: none; border: 0; color: var(--fire2); font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; }
 
+  /* Annuler / Appliquer */
+  .ligne-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+  .ligne-actions.avec-annuler { grid-template-columns: 1fr 2fr; }
+  .ligne-actions .save { margin-top: 0; }
+  .ligne-actions .annuler { display: none; }
+  .ligne-actions.avec-annuler .annuler { display: block; }
+
   /* Fenêtre de réglages */
   dialog { max-height: 90vh; overflow: auto; overscroll-behavior: contain; }
   html.bloque, html.bloque body { overflow: hidden; height: 100%; }
@@ -227,7 +234,10 @@
         <div class="lab"><span>🌀 Ventilation</span></div>
         <div class="seg" id="segVent" style="grid-template-columns:repeat(6,1fr)"></div>
       </div>
-      <button class="save" id="btnApplyPoele">Appliquer au poêle</button>
+      <div class="ligne-actions" id="actionsPoele">
+        <button class="save annuler" id="btnCancelPoele">Annuler</button>
+        <button class="save" id="btnApplyPoele">Appliquer au poêle</button>
+      </div>
       <div class="banner" id="bannerPoele"><span class="spinner"></span><span class="bt"></span></div>
       <div class="meta" id="resPoele"></div>
     </section>
@@ -251,7 +261,10 @@
         <label class="f">De<input type="time" id="debut" value="06:30"></label>
         <label class="f">À<input type="time" id="fin" value="22:00"></label>
       </div>
-      <button class="save" id="btnSave">Enregistrer les réglages</button>
+      <div class="ligne-actions" id="actionsAuto">
+        <button class="save annuler" id="btnCancelAuto">Annuler</button>
+        <button class="save" id="btnSave">Enregistrer les réglages</button>
+      </div>
       <p class="hint">Vérification toutes les 30 min. Le poêle est éteint à l'heure de fin. Plage possible : entre 6h et 22h30.</p>
     </section>
 
@@ -577,12 +590,14 @@ function dessinerPoele() {
   $("segVent").innerHTML = [1, 2, 3, 4, 5, 6].map(v => `<button class="${v === poele.vent ? "sel" : ""}" data-v="${v}">${VENT(v)}</button>`).join("");
   const modif = JSON.stringify(poele) !== JSON.stringify(poeleRef);
   $("btnApplyPoele").classList.toggle("dirty", modif);
+  $("actionsPoele").classList.toggle("avec-annuler", modif && !enCours);
   $("btnApplyPoele").disabled = !modif || enCours;
 }
 document.querySelectorAll("[data-c]").forEach(b => b.addEventListener("click", () => {
   if (!poele) return;
   poele.cons = Math.max(7, Math.min(40, poele.cons + Number(b.dataset.c))); dessinerPoele();
 }));
+$("btnCancelPoele").addEventListener("click", () => { poele = clone(poeleRef); dessinerPoele(); });
 $("segPuis").addEventListener("click", ev => { const v = ev.target.dataset.v; if (v) { poele.puis = Number(v); dessinerPoele(); } });
 $("segVent").addEventListener("click", ev => { const v = ev.target.dataset.v; if (v) { poele.vent = Number(v); dessinerPoele(); } });
 
@@ -608,6 +623,7 @@ function verifierModif() {
   const modif = Object.keys(c).some(k => c[k] !== initial[k]);
   $("btnSave").classList.toggle("dirty", modif);
   $("btnSave").disabled = !modif;
+  $("actionsAuto").classList.toggle("avec-annuler", modif);
 }
 document.querySelectorAll(".stepper button[data-d]").forEach(b => b.addEventListener("click", ev => {
   ev.preventDefault();
@@ -616,6 +632,12 @@ document.querySelectorAll(".stepper button[data-d]").forEach(b => b.addEventList
   majSteppers();
 }));
 ["debut", "fin"].forEach(id => $(id).addEventListener("input", verifierModif));
+$("btnCancelAuto").addEventListener("click", () => {
+  vals.min = parseFloat(String(initial.TEMP_MIN).replace(",", "."));
+  vals.max = parseFloat(String(initial.TEMP_MAX).replace(",", "."));
+  $("debut").value = initial.HEURE_DEBUT; $("fin").value = initial.HEURE_FIN;
+  majSteppers();
+});
 
 async function chargerReglages() {
   const lus = { ...DEFAUTS };
