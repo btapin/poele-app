@@ -11,7 +11,7 @@ self.addEventListener("push", (e) => {
   e.waitUntil(self.registration.showNotification(d.titre || "Poêle", {
     body: d.texte || "",
     icon: "icon-192.png",
-    badge: "icon-192.png",
+    badge: "badge-96.png",   // petite icône de la barre d'état : blanche sur fond transparent
     tag: d.tag || undefined,
     renotify: !!d.tag,
     requireInteraction: !!d.urgent,
