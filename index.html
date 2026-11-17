@@ -58,6 +58,7 @@
   .banner { display: none; margin-top: 14px; padding: 10px 12px; border-radius: 12px; font-size: 14px;
     background: var(--card2); align-items: center; gap: 10px; }
   .banner.show { display: flex; }
+  .banner.done { display: flex; } .banner.done .spinner { display: none; }
   .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line);
     border-top-color: var(--fire); animation: spin .8s linear infinite; flex: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -175,7 +176,7 @@
         <button class="main b-off" id="btnOff">✖ Éteindre</button>
         <button class="main b-refresh" id="btnRefresh">↻ Relever la température maintenant</button>
       </div>
-      <div class="banner" id="banner"><span class="spinner"></span><span id="bannerTxt"></span></div>
+      <div class="banner" id="banner"><span class="spinner"></span><span class="bt"></span></div>
     </section>
 
     <section class="card" id="cardPoele">
@@ -193,6 +194,8 @@
         <div class="seg" id="segVent" style="grid-template-columns:repeat(6,1fr)"></div>
       </div>
       <button class="save" id="btnApplyPoele">Appliquer au poêle</button>
+      <div class="banner" id="bannerPoele"><span class="spinner"></span><span class="bt"></span></div>
+      <div class="meta" id="resPoele"></div>
     </section>
 
     <section class="card">
@@ -229,6 +232,7 @@
 <dialog id="dlg">
   <h2>Réglages</h2>
   <div class="sub">Enregistrés uniquement sur cet appareil.</div>
+  <label class="f">Adresse du relais Cloudflare (facultatif, pour des commandes en quelques secondes)<input type="text" id="relais" placeholder="https://poele.xxxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <label class="f">Ton prénom (affiché dans l'historique)<input type="text" id="qui" placeholder="ex. Baptiste" autocapitalize="words"></label>
   <label class="f">Dépôt GitHub (pseudo/dépôt)<input type="text" id="repo" placeholder="btapin/Po-le" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <label class="f">Jeton d'accès<input type="password" id="token" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
@@ -253,7 +257,7 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch { delete mem[k]; } },
 };
 const mem = {};
-let cfg = { repo: store.get("poele.repo") || "btapin/Po-le", token: store.get("poele.token"), qui: store.get("poele.qui") };
+let cfg = { repo: store.get("poele.repo") || "btapin/Po-le", token: store.get("poele.token"), qui: store.get("poele.qui"), relais: store.get("poele.relais") };
 
 /* ---------- API GitHub ---------- */
 async function gh(path, opts = {}) {
@@ -281,18 +285,21 @@ function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 3200);
 }
-function banner(msg) {
-  $("banner").classList.toggle("show", !!msg);
-  $("bannerTxt").textContent = msg || "";
+let enCours = false;   // une seule commande à la fois, quel que soit le bloc
+function banner(msg, zone = "banner") {
+  enCours = !!msg;
+  ["banner", "bannerPoele"].forEach(id => $(id).classList.remove("show"));
+  if (msg) { $(zone).classList.add("show"); $(zone).querySelector(".bt").textContent = msg; }
   majBoutons();
 }
 /* Allumer grisé si le poêle tourne déjà, Éteindre grisé s'il est déjà éteint */
 function majBoutons() {
-  const occupe = $("banner").classList.contains("show");
+  const occupe = enCours;
   const eteint = dernierEtat ? dernierEtat.eteint : null;
   $("btnOn").disabled = occupe || eteint === false;
   $("btnOff").disabled = occupe || eteint === true;
   $("btnRefresh").disabled = occupe;
+  if (typeof dessinerPoele === "function" && poele) dessinerPoele();
 }
 
 /* ---------- Affichage de l'état ---------- */
@@ -308,6 +315,7 @@ const fmt = v => v === null || v === undefined || v === "" ? "--" : String(v).re
 let dernierEtat = null;
 
 function afficher(e) {
+  if (dernierEtat && e.horodatage && dernierEtat.horodatage && e.horodatage < dernierEtat.horodatage) return;
   dernierEtat = e;
   const on = e.eteint === false;
   $("hero").classList.toggle("on", on);
@@ -315,7 +323,7 @@ function afficher(e) {
   $("temp").innerHTML = `${fmt(e.temperature)}<sup>°C</sup>`;
   $("consigne").textContent = `${fmt(e.consigne)} °C`;
   $("maj").textContent = `Relevé ${depuis(e.horodatage)}`;
-  $("derniere").textContent = e.action ? `Dernière décision : ${e.action}` : "";
+  $("derniere").textContent = e.action && !/^(Consigne|Puissance|Ventilation)/.test(e.action) ? `Dernière action : ${e.action}` : "";
   majBoutons();
   rendrePoele(e);
   if (e.nom) { $("nom").textContent = `Poêle · ${e.nom}`; document.title = `Poêle · ${e.nom}`; }
@@ -333,26 +341,76 @@ async function chargerEtat() {
   }
 }
 
+/* ---------- Relais Cloudflare ---------- */
+async function relais(chemin, corps) {
+  const res = await fetch(cfg.relais + chemin, {
+    method: corps ? "POST" : "GET",
+    cache: "no-store",
+    headers: { "Authorization": `Bearer ${cfg.token}`, ...(corps ? { "Content-Type": "application/json" } : {}) },
+    body: corps ? JSON.stringify(corps) : undefined,
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.erreur || `Relais : erreur ${res.status}`);
+  return j;
+}
+/** Lecture en direct à l'ouverture de l'appli (si le relais est configuré) */
+async function lireDirect() {
+  if (!cfg.relais || enCours) return;
+  try {
+    $("maj").textContent = "Lecture en direct…";
+    const j = await relais("/etat");
+    afficher(j.etat);
+  } catch (err) {
+    if (dernierEtat) afficher({ ...dernierEtat });
+    toast(`Lecture directe impossible : ${err.message}`);
+  }
+}
+
 /* ---------- Commandes ---------- */
 function lancer(action, detail = "") {
   return gh(`/actions/workflows/${WF}/dispatches`, {
     method: "POST", body: JSON.stringify({ ref: "main", inputs: { action, qui: cfg.qui || "", detail } }),
   });
 }
-async function commande(action, libelle, detail = "") {
+async function commande(action, libelle, detail = "", zone = "banner") {
   const avant = dernierEtat ? dernierEtat.horodatage : "";
-  banner(`${libelle}… (environ 30 à 60 s)`);
+  const fini = msg => {
+    banner("");
+    if (zone === "bannerPoele") $("resPoele").textContent = msg;
+    else toast(msg);
+  };
+  if (zone === "bannerPoele") $("resPoele").textContent = "";
+
+  // Voie rapide : relais Cloudflare (quelques secondes)
+  if (cfg.relais && ["on", "off", "status", "regler"].includes(action)) {
+    banner(`${libelle}…`, zone);
+    try {
+      let j;
+      if (action === "status") j = await relais(`/etat?journal=1&qui=${encodeURIComponent(cfg.qui || "")}`);
+      else if (action === "regler") j = await relais("/commande", { action, qui: cfg.qui || "", ...JSON.parse(detail) });
+      else j = await relais("/commande", { action, qui: cfg.qui || "" });
+      afficher(j.etat);
+      fini(zone === "bannerPoele" ? `✓ Appliqué : ${j.etat.action}` : `✓ ${j.etat.action}`);
+    } catch (err) {
+      envoiDepuis = null; poeleRef = null; poele = null; if (dernierEtat) afficher({ ...dernierEtat });
+      fini(`⚠️ ${err.message}`);
+    }
+    setTimeout(chargerHisto, 2500);   // l'historique est publié sur GitHub juste après
+    return;
+  }
+
+  banner(`${libelle}… (environ 30 à 60 s)`, zone);
   try {
     await lancer(action, detail);
     const fin = Date.now() + 150000;
     while (Date.now() < fin) {
-      await new Promise(r => setTimeout(r, 6000));
+      await new Promise(r => setTimeout(r, 3000));
       const e = await chargerEtat().catch(() => null);
-      if (e && e.horodatage !== avant) { banner(""); toast("✓ Fait"); chargerHisto(); return; }
+      if (e && e.horodatage !== avant) { fini(zone === "bannerPoele" ? `✓ Appliqué : ${e.action}` : "✓ Fait"); chargerHisto(); return; }
     }
-    banner(""); toast("Toujours en cours… regarde l'activité dans un instant");
+    fini("Toujours en cours… regarde l'historique dans un instant");
     chargerHisto();
-  } catch (err) { banner(""); toast(err.message); }
+  } catch (err) { fini(err.message); }
 }
 
 /* ---------- Réglages du poêle ---------- */
@@ -361,12 +419,15 @@ const JOURS_REG = ["monday", "tuesday", "wednesday", "thursday", "friday", "satu
 const JOURS_LONG = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
 const VENT = v => v === 6 ? "Auto" : String(v);
 let poeleRef = null, poele = null;      // valeurs du poêle / valeurs modifiées
+let envoiDepuis = null;                 // horodatage du relevé au moment d'un envoi en cours
 const clone = o => JSON.parse(JSON.stringify(o));
 const vers10 = hhmm => { const [h, m] = hhmm.split(":").map(Number); return Math.min(143, Math.round((h * 60 + m) / 10)); };
 const enHeure = v => v >= 144 || v === null || v === undefined ? "" : `${String(Math.floor(v / 6)).padStart(2, "0")}:${String((v % 6) * 10).padStart(2, "0")}`;
 
 function rendrePoele(e) {
   // Ne pas écraser une modification en cours
+  if (envoiDepuis !== null && e.horodatage === envoiDepuis) { dessinerPoele(); return; }  // ancien relevé : on garde l'affichage demandé
+  envoiDepuis = null;
   if (e.consigne !== undefined && (!poele || JSON.stringify(poele) === JSON.stringify(poeleRef))) {
     poeleRef = { cons: Number(e.consigne), puis: Number(e.puissance), vent: Number(e.ventilation) };
     poele = clone(poeleRef);
@@ -385,7 +446,7 @@ function dessinerPoele() {
   $("segVent").innerHTML = [1, 2, 3, 4, 5, 6].map(v => `<button class="${v === poele.vent ? "sel" : ""}" data-v="${v}">${VENT(v)}</button>`).join("");
   const modif = JSON.stringify(poele) !== JSON.stringify(poeleRef);
   $("btnApplyPoele").classList.toggle("dirty", modif);
-  $("btnApplyPoele").disabled = !modif;
+  $("btnApplyPoele").disabled = !modif || enCours;
 }
 document.querySelectorAll("[data-c]").forEach(b => b.addEventListener("click", () => {
   if (!poele) return;
@@ -400,8 +461,8 @@ $("btnApplyPoele").addEventListener("click", () => {
   if (poele.puis !== poeleRef.puis) { valeurs.power_set = poele.puis; txt.push(`Puissance ${poeleRef.puis} → ${poele.puis}`); }
   if (poele.vent !== poeleRef.vent) { valeurs.vent_main_set = poele.vent; txt.push(`Ventilation ${VENT(poeleRef.vent)} → ${VENT(poele.vent)}`); }
   if (!txt.length) return;
-  poeleRef = clone(poele); dessinerPoele();
-  commande("regler", "Envoi des réglages au poêle", JSON.stringify({ texte: txt.join(" · "), valeurs }));
+  poeleRef = clone(poele); envoiDepuis = dernierEtat ? dernierEtat.horodatage : ""; dessinerPoele();
+  commande("regler", "Envoi des réglages au poêle", JSON.stringify({ texte: txt.join(" · "), valeurs }), "bannerPoele");
 });
 
 /* ---------- Mode auto & réglages ---------- */
@@ -514,17 +575,17 @@ $("btnMore").addEventListener("click", () => { histoMax += 20; chargerHisto(); }
 
 /* ---------- Réglages (jeton) ---------- */
 function ouvrirReglages() {
-  $("repo").value = cfg.repo; $("token").value = cfg.token; $("qui").value = cfg.qui; $("dlgErr").textContent = "";
+  $("repo").value = cfg.repo; $("token").value = cfg.token; $("qui").value = cfg.qui; $("relais").value = cfg.relais; $("dlgErr").textContent = "";
   $("dlg").showModal();
 }
 $("btnSettings").addEventListener("click", ouvrirReglages);
 $("btnWelcome").addEventListener("click", ouvrirReglages);
 $("btnDlgSave").addEventListener("click", async () => {
-  cfg = { repo: $("repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""), token: $("token").value.trim(), qui: $("qui").value.trim() };
+  cfg = { repo: $("repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""), token: $("token").value.trim(), qui: $("qui").value.trim(), relais: $("relais").value.trim().replace(/\/+$/, "") };
   $("dlgErr").textContent = "Vérification…";
   try {
     await gh(`/actions/workflows/${WF}`);
-    store.set("poele.repo", cfg.repo); store.set("poele.token", cfg.token); store.set("poele.qui", cfg.qui);
+    store.set("poele.repo", cfg.repo); store.set("poele.token", cfg.token); store.set("poele.qui", cfg.qui); store.set("poele.relais", cfg.relais);
     $("dlg").close(); demarrer();
   } catch (err) { $("dlgErr").textContent = err.notFound ? "Dépôt ou workflow introuvable" : err.message; }
 });
@@ -544,10 +605,16 @@ async function demarrer() {
   if (!ok) return;
   try {
     await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerHisto()]);
+    lireDirect();
   } catch (err) { toast(err.message); }
 }
-setInterval(() => { if (cfg.token && !$("banner").classList.contains("show")) { chargerEtat().catch(() => {}); chargerHisto(); } }, 60000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token) { chargerEtat().catch(() => {}); chargerHisto(); } });
+setInterval(() => { if (cfg.token && !enCours) { chargerEtat().catch(() => {}); chargerHisto(); } }, 60000);
+let derniereLecture = Date.now();
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !cfg.token) return;
+  chargerEtat().catch(() => {}); chargerHisto();
+  if (Date.now() - derniereLecture > 120000) { derniereLecture = Date.now(); lireDirect(); }
+});
 demarrer();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
