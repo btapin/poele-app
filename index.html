@@ -135,7 +135,8 @@
   .linkbtn { background: none; border: 0; color: var(--fire2); font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; }
 
   /* Fenêtre de réglages */
-  dialog { max-height: 90vh; overflow: auto; }
+  dialog { max-height: 90vh; overflow: auto; overscroll-behavior: contain; }
+  html.bloque, html.bloque body { overflow: hidden; height: 100%; }
   .dhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   .dhead .icon-btn { width: 36px; height: 36px; font-size: 16px; }
   .bloc { border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 12px; background: var(--card2); }
@@ -711,8 +712,10 @@ function ouvrirReglages() {
   $("confirmForget").classList.remove("show");
   $("avance").open = !cfg.token;          // première utilisation : on ouvre directement les paramètres avancés
   $("dlg").showModal();
+  document.documentElement.classList.add("bloque");   // la page derrière ne défile plus
   majNotif();
 }
+$("dlg").addEventListener("close", () => document.documentElement.classList.remove("bloque"));
 $("btnDlgClose").addEventListener("click", () => $("dlg").close());
 $("btnSettings").addEventListener("click", ouvrirReglages);
 $("btnWelcome").addEventListener("click", ouvrirReglages);
