@@ -103,6 +103,31 @@
   .more { width: 100%; margin-top: 8px; padding: 10px; background: transparent; border: 1px dashed var(--line);
     border-radius: 12px; color: var(--muted); font-weight: 600; cursor: pointer; }
 
+  /* Réglages du poêle */
+  .seg { display: grid; gap: 6px; margin-top: 6px; }
+  .seg button { padding: 11px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);
+    color: var(--text); font-weight: 700; font-size: 15px; cursor: pointer; }
+  .seg button.sel { background: var(--fire); border-color: var(--fire); color: #1a120b; }
+  .fld { margin-top: 14px; }
+  .fld > .lab { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
+  .clock { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px;
+    padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  .clock b { color: var(--text); }
+  .small-btn { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);
+    color: var(--text); font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .plage { border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-top: 10px; background: var(--card2); }
+  .plage.off { opacity: .75; }
+  .plage .ph { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+  .plage .times { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: center; margin-top: 10px; }
+  .plage .times span { color: var(--muted); }
+  .plage input[type=time] { margin-top: 0; background: var(--card); min-width: 0; }
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 10px; }
+  .days button { padding: 8px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+    color: var(--muted); font-weight: 700; font-size: 13px; cursor: pointer; }
+  .days button.sel { background: rgba(255,122,47,.2); border-color: var(--fire); color: var(--text); }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .linkbtn { background: none; border: 0; color: var(--fire2); font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; }
+
   /* Réglages */
   dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--r);
     width: min(92vw, 440px); padding: 20px; }
@@ -151,6 +176,23 @@
         <button class="main b-refresh" id="btnRefresh">↻ Relever la température maintenant</button>
       </div>
       <div class="banner" id="banner"><span class="spinner"></span><span id="bannerTxt"></span></div>
+    </section>
+
+    <section class="card" id="cardPoele">
+      <h2>Réglages du poêle</h2>
+      <div class="fld">
+        <div class="lab"><span>🌡️ Consigne</span><span id="consInfo"></span></div>
+        <div class="stepper"><button data-c="-1">−</button><output id="vcons">--</output><button data-c="1">+</button></div>
+      </div>
+      <div class="fld">
+        <div class="lab"><span>🔥 Puissance</span><span id="puisInfo"></span></div>
+        <div class="seg" id="segPuis" style="grid-template-columns:repeat(5,1fr)"></div>
+      </div>
+      <div class="fld">
+        <div class="lab"><span>🌀 Ventilation</span></div>
+        <div class="seg" id="segVent" style="grid-template-columns:repeat(6,1fr)"></div>
+      </div>
+      <button class="save" id="btnApplyPoele">Appliquer au poêle</button>
     </section>
 
     <section class="card">
@@ -275,6 +317,7 @@ function afficher(e) {
   $("maj").textContent = `Relevé ${depuis(e.horodatage)}`;
   $("derniere").textContent = e.action ? `Dernière décision : ${e.action}` : "";
   majBoutons();
+  rendrePoele(e);
   if (e.nom) { $("nom").textContent = `Poêle · ${e.nom}`; document.title = `Poêle · ${e.nom}`; }
 }
 
@@ -296,11 +339,11 @@ function lancer(action, detail = "") {
     method: "POST", body: JSON.stringify({ ref: "main", inputs: { action, qui: cfg.qui || "", detail } }),
   });
 }
-async function commande(action, libelle) {
+async function commande(action, libelle, detail = "") {
   const avant = dernierEtat ? dernierEtat.horodatage : "";
   banner(`${libelle}… (environ 30 à 60 s)`);
   try {
-    await lancer(action);
+    await lancer(action, detail);
     const fin = Date.now() + 150000;
     while (Date.now() < fin) {
       await new Promise(r => setTimeout(r, 6000));
@@ -311,6 +354,55 @@ async function commande(action, libelle) {
     chargerHisto();
   } catch (err) { banner(""); toast(err.message); }
 }
+
+/* ---------- Réglages du poêle ---------- */
+const JOURS = ["L", "M", "M", "J", "V", "S", "D"];
+const JOURS_REG = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const JOURS_LONG = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
+const VENT = v => v === 6 ? "Auto" : String(v);
+let poeleRef = null, poele = null;      // valeurs du poêle / valeurs modifiées
+const clone = o => JSON.parse(JSON.stringify(o));
+const vers10 = hhmm => { const [h, m] = hhmm.split(":").map(Number); return Math.min(143, Math.round((h * 60 + m) / 10)); };
+const enHeure = v => v >= 144 || v === null || v === undefined ? "" : `${String(Math.floor(v / 6)).padStart(2, "0")}:${String((v % 6) * 10).padStart(2, "0")}`;
+
+function rendrePoele(e) {
+  // Ne pas écraser une modification en cours
+  if (e.consigne !== undefined && (!poele || JSON.stringify(poele) === JSON.stringify(poeleRef))) {
+    poeleRef = { cons: Number(e.consigne), puis: Number(e.puissance), vent: Number(e.ventilation) };
+    poele = clone(poeleRef);
+  }
+  dessinerPoele();
+}
+
+function dessinerPoele() {
+  $("cardPoele").hidden = !poele || isNaN(poele.cons);
+  if ($("cardPoele").hidden) return;
+  $("vcons").textContent = `${poele.cons} °C`;
+  $("consInfo").textContent = poele.cons !== poeleRef.cons ? `actuellement ${poeleRef.cons} °C` : "";
+  const r = dernierEtat && dernierEtat.puissance_reelle;
+  $("puisInfo").textContent = dernierEtat && dernierEtat.eteint === false && r ? `puissance réelle : ${r}` : "";
+  $("segPuis").innerHTML = [1, 2, 3, 4, 5].map(v => `<button class="${v === poele.puis ? "sel" : ""}" data-v="${v}">${v}</button>`).join("");
+  $("segVent").innerHTML = [1, 2, 3, 4, 5, 6].map(v => `<button class="${v === poele.vent ? "sel" : ""}" data-v="${v}">${VENT(v)}</button>`).join("");
+  const modif = JSON.stringify(poele) !== JSON.stringify(poeleRef);
+  $("btnApplyPoele").classList.toggle("dirty", modif);
+  $("btnApplyPoele").disabled = !modif;
+}
+document.querySelectorAll("[data-c]").forEach(b => b.addEventListener("click", () => {
+  if (!poele) return;
+  poele.cons = Math.max(7, Math.min(40, poele.cons + Number(b.dataset.c))); dessinerPoele();
+}));
+$("segPuis").addEventListener("click", ev => { const v = ev.target.dataset.v; if (v) { poele.puis = Number(v); dessinerPoele(); } });
+$("segVent").addEventListener("click", ev => { const v = ev.target.dataset.v; if (v) { poele.vent = Number(v); dessinerPoele(); } });
+
+$("btnApplyPoele").addEventListener("click", () => {
+  const valeurs = {}, txt = [];
+  if (poele.cons !== poeleRef.cons) { valeurs.temp_air_set = poele.cons; txt.push(`Consigne ${poeleRef.cons} → ${poele.cons} °C`); }
+  if (poele.puis !== poeleRef.puis) { valeurs.power_set = poele.puis; txt.push(`Puissance ${poeleRef.puis} → ${poele.puis}`); }
+  if (poele.vent !== poeleRef.vent) { valeurs.vent_main_set = poele.vent; txt.push(`Ventilation ${VENT(poeleRef.vent)} → ${VENT(poele.vent)}`); }
+  if (!txt.length) return;
+  poeleRef = clone(poele); dessinerPoele();
+  commande("regler", "Envoi des réglages au poêle", JSON.stringify({ texte: txt.join(" · "), valeurs }));
+});
 
 /* ---------- Mode auto & réglages ---------- */
 const vals = { min: 18, max: 20 };
@@ -323,7 +415,7 @@ function verifierModif() {
   const c = courant();
   $("btnSave").classList.toggle("dirty", Object.keys(c).some(k => c[k] !== initial[k]));
 }
-document.querySelectorAll(".stepper button").forEach(b => b.addEventListener("click", ev => {
+document.querySelectorAll(".stepper button[data-d]").forEach(b => b.addEventListener("click", ev => {
   ev.preventDefault();
   const t = b.dataset.t; vals[t] = Math.round((vals[t] + parseFloat(b.dataset.d)) * 2) / 2;
   if (vals.min >= vals.max) { if (t === "min") vals.max = vals.min + 0.5; else vals.min = vals.max - 0.5; }
