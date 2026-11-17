@@ -33,6 +33,11 @@
 
   /* État */
   .hero { position: relative; overflow: hidden; }
+  .hero.alarme { background: radial-gradient(120% 90% at 85% 0%, rgba(255,107,107,.30), transparent 60%), var(--card); border-color: rgba(255,107,107,.5); }
+  .hero.alarme .dot { background: var(--bad); box-shadow: 0 0 10px var(--bad); animation: pulse 1s infinite; }
+  .alerte { display: none; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255,107,107,.12);
+    border: 1px solid rgba(255,107,107,.4); font-size: 14px; }
+  .alerte.show { display: block; }
   .hero.on { background: radial-gradient(120% 90% at 85% 0%, rgba(255,122,47,.28), transparent 60%), var(--card); }
   .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
     background: var(--card2); font-weight: 600; font-size: 14px; }
@@ -174,6 +179,7 @@
         <div class="big" id="temp">--<sup>°C</sup></div>
         <div class="sub">Consigne<br><b id="consigne">--</b></div>
       </div>
+      <div class="alerte" id="alerte"></div>
       <div class="meta" id="maj">Pas encore de relevé</div>
       <div class="meta" id="derniere"></div>
 
@@ -318,8 +324,9 @@ function banner(msg, zone = "banner") {
 function majBoutons() {
   const occupe = enCours;
   const eteint = dernierEtat ? dernierEtat.eteint : null;
-  $("btnOn").disabled = occupe || eteint === false;
-  $("btnOff").disabled = occupe || eteint === true;
+  const enAlarme = !!(dernierEtat && (dernierEtat.alarme || /alarm/i.test(dernierEtat.etat || "")));
+  $("btnOn").disabled = occupe || eteint === false || enAlarme;
+  $("btnOff").disabled = occupe || eteint === true || enAlarme;
   $("btnRefresh").disabled = occupe;
   if (typeof dessinerPoele === "function" && poele) dessinerPoele();
 }
@@ -339,9 +346,13 @@ let dernierEtat = null;
 function afficher(e) {
   if (dernierEtat && e.horodatage && dernierEtat.horodatage && e.horodatage < dernierEtat.horodatage) return;
   dernierEtat = e;
-  const on = e.eteint === false;
+  const alarme = e.alarme || (/alarm/i.test(e.etat || "") ? { texte: "Alarme" } : null);
+  const on = e.eteint === false && !alarme;
   $("hero").classList.toggle("on", on);
-  $("etat").textContent = e.eteint === true ? "Éteint" : on ? `En marche · ${e.etat}` : (e.etat || "Inconnu");
+  $("hero").classList.toggle("alarme", !!alarme);
+  $("etat").textContent = alarme ? `En alarme` : e.eteint === true ? "Éteint" : on ? `En marche · ${e.etat}` : (e.etat || "Inconnu");
+  $("alerte").classList.toggle("show", !!alarme);
+  $("alerte").innerHTML = alarme ? `<b>⚠️ ${esc(alarme.texte)}</b><br>Le poêle doit être réarmé directement sur l'appareil. Une fois réarmé, tu pourras le rallumer depuis l'appli.` : "";
   $("temp").innerHTML = `${fmt(e.temperature)}<sup>°C</sup>`;
   $("consigne").textContent = `${fmt(e.consigne)} °C`;
   $("maj").textContent = `Relevé ${depuis(e.horodatage)}`;
