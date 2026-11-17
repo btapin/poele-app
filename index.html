@@ -91,12 +91,17 @@
 
   /* Activité */
   ul.runs { list-style: none; margin: 0; padding: 0; }
-  ul.runs li { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line);
+  ul.runs li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line);
     font-size: 14px; }
   ul.runs li:first-child { border-top: 0; }
   .ri { width: 22px; text-align: center; flex: none; }
   .rt { flex: 1; }
   .rd { color: var(--muted); font-size: 13px; }
+  .rt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 1px; }
+  .rd { white-space: nowrap; }
+  li.warn { color: var(--fire2); }
+  .more { width: 100%; margin-top: 8px; padding: 10px; background: transparent; border: 1px dashed var(--line);
+    border-radius: 12px; color: var(--muted); font-weight: 600; cursor: pointer; }
 
   /* Réglages */
   dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--r);
@@ -172,8 +177,9 @@
     </section>
 
     <section class="card">
-      <h2>Activité récente</h2>
+      <h2>Historique</h2>
       <ul class="runs" id="runs"><li class="rd">Chargement…</li></ul>
+      <button class="more" id="btnMore" hidden>Voir plus</button>
     </section>
   </div>
 </main>
@@ -181,6 +187,7 @@
 <dialog id="dlg">
   <h2>Réglages</h2>
   <div class="sub">Enregistrés uniquement sur cet appareil.</div>
+  <label class="f">Ton prénom (affiché dans l'historique)<input type="text" id="qui" placeholder="ex. Baptiste" autocapitalize="words"></label>
   <label class="f">Dépôt GitHub (pseudo/dépôt)<input type="text" id="repo" placeholder="btapin/Po-le" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <label class="f">Jeton d'accès<input type="password" id="token" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <div class="sub err" id="dlgErr"></div>
@@ -204,7 +211,7 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch { delete mem[k]; } },
 };
 const mem = {};
-let cfg = { repo: store.get("poele.repo") || "btapin/Po-le", token: store.get("poele.token") };
+let cfg = { repo: store.get("poele.repo") || "btapin/Po-le", token: store.get("poele.token"), qui: store.get("poele.qui") };
 
 /* ---------- API GitHub ---------- */
 async function gh(path, opts = {}) {
@@ -284,21 +291,24 @@ async function chargerEtat() {
 }
 
 /* ---------- Commandes ---------- */
+function lancer(action, detail = "") {
+  return gh(`/actions/workflows/${WF}/dispatches`, {
+    method: "POST", body: JSON.stringify({ ref: "main", inputs: { action, qui: cfg.qui || "", detail } }),
+  });
+}
 async function commande(action, libelle) {
   const avant = dernierEtat ? dernierEtat.horodatage : "";
   banner(`${libelle}… (environ 30 à 60 s)`);
   try {
-    await gh(`/actions/workflows/${WF}/dispatches`, {
-      method: "POST", body: JSON.stringify({ ref: "main", inputs: { action } }),
-    });
+    await lancer(action);
     const fin = Date.now() + 150000;
     while (Date.now() < fin) {
       await new Promise(r => setTimeout(r, 6000));
       const e = await chargerEtat().catch(() => null);
-      if (e && e.horodatage !== avant) { banner(""); toast("✓ Fait"); chargerRuns(); return; }
+      if (e && e.horodatage !== avant) { banner(""); toast("✓ Fait"); chargerHisto(); return; }
     }
     banner(""); toast("Toujours en cours… regarde l'activité dans un instant");
-    chargerRuns();
+    chargerHisto();
   } catch (err) { banner(""); toast(err.message); }
 }
 
@@ -337,11 +347,15 @@ async function enregistrerReglages() {
   if (!c.HEURE_DEBUT || !c.HEURE_FIN || c.HEURE_DEBUT >= c.HEURE_FIN) return toast("L'heure de début doit être avant l'heure de fin");
   $("btnSave").disabled = true;
   try {
+    const LIB = { TEMP_MIN: ["Allumer sous", " °C"], TEMP_MAX: ["Éteindre au-dessus de", " °C"], HEURE_DEBUT: ["Début", ""], HEURE_FIN: ["Fin", ""] };
+    const changes = [];
     for (const [k, v] of Object.entries(c)) {
       if (v === initial[k]) continue;
       await ecrireVariable(k, v);
+      changes.push(`${LIB[k][0]} ${fmt(initial[k])} → ${fmt(v)}${LIB[k][1]}`);
     }
     initial = c; verifierModif(); toast("✓ Réglages enregistrés");
+    if (changes.length) lancer("reglages", changes.join(" · ")).then(() => setTimeout(chargerHisto, 40000)).catch(() => {});
   } catch (err) { toast(err.message); }
   $("btnSave").disabled = false;
 }
@@ -369,35 +383,56 @@ $("auto").addEventListener("change", async () => {
     await ecrireVariable("AUTO", on ? "on" : "off");
     afficherAuto(on);
     toast(on ? "Mode automatique activé" : "Mode automatique désactivé");
+    lancer("reglages", on ? "Mode automatique activé" : "Mode automatique désactivé").then(() => setTimeout(chargerHisto, 40000)).catch(() => {});
   } catch (err) { afficherAuto(!on); toast(err.message); }
 });
 
-/* ---------- Activité ---------- */
-async function chargerRuns() {
-  try {
-    const d = await gh(`/actions/workflows/${WF}/runs?per_page=6`);
-    const li = d.workflow_runs.map(r => {
-      const ic = r.status !== "completed" ? "⏳" : r.conclusion === "success" ? "✅" : r.conclusion === "cancelled" ? "⏹️" : "❌";
-      const qui = r.event === "schedule" ? "Vérification automatique" : "Commande manuelle";
-      return `<li><span class="ri">${ic}</span><span class="rt">${qui}</span><span class="rd">${depuis(r.created_at)}</span></li>`;
-    });
-    $("runs").innerHTML = li.join("") || `<li class="rd">Aucune activité</li>`;
-  } catch (err) { $("runs").innerHTML = `<li class="rd err">${err.message}</li>`; }
+/* ---------- Historique ---------- */
+const ICONES = { allumage: "🔥", extinction: "❄️", releve: "🌡️", reglages: "⚙️", rien: "ℹ️", erreur: "⚠️" };
+let histo = [], histoMax = 8;
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function quand(iso) {
+  const d = new Date(iso), auj = new Date(), hier = new Date(Date.now() - 864e5);
+  const h = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === auj.toDateString()) return h;
+  if (d.toDateString() === hier.toDateString()) return `Hier ${h}`;
+  return `${d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} ${h}`;
 }
+async function chargerHisto() {
+  const lignes = [];
+  try {
+    // Commandes en cours ou dernière exécution en échec (avant même que le script écrive l'historique)
+    const d = await gh(`/actions/workflows/${WF}/runs?per_page=1`);
+    const r = d.workflow_runs[0];
+    if (r && r.status !== "completed") lignes.push(`<li class="warn"><span class="ri">⏳</span><span class="rt">Commande en cours…</span><span class="rd">${quand(r.created_at)}</span></li>`);
+    else if (r && r.conclusion === "failure") lignes.push(`<li class="warn"><span class="ri">⚠️</span><span class="rt">La dernière exécution a échoué<small>Détails dans l'onglet Actions de GitHub</small></span><span class="rd">${quand(r.created_at)}</span></li>`);
+  } catch {}
+  try {
+    histo = JSON.parse(await gh(`/contents/historique.json?ref=etat&t=${Date.now()}`, { raw: true }));
+  } catch (err) { if (!err.notFound) { $("runs").innerHTML = `<li class="rd err">${esc(err.message)}</li>`; return; } histo = []; }
+  for (const e of histo.slice(0, histoMax)) {
+    const sous = [e.mode === "auto" ? "Automatique" : e.qui ? `par ${e.qui}` : "Manuel"];
+    if (e.temperature !== undefined && e.temperature !== null) sous.push(`${fmt(e.temperature)} °C`);
+    lignes.push(`<li><span class="ri">${ICONES[e.type] || "•"}</span><span class="rt">${esc(e.texte)}<small>${esc(sous.join(" · "))}</small></span><span class="rd">${quand(e.horodatage)}</span></li>`);
+  }
+  $("runs").innerHTML = lignes.join("") || `<li class="rd">Aucun événement pour l'instant</li>`;
+  $("btnMore").hidden = histo.length <= histoMax;
+}
+$("btnMore").addEventListener("click", () => { histoMax += 20; chargerHisto(); });
 
 /* ---------- Réglages (jeton) ---------- */
 function ouvrirReglages() {
-  $("repo").value = cfg.repo; $("token").value = cfg.token; $("dlgErr").textContent = "";
+  $("repo").value = cfg.repo; $("token").value = cfg.token; $("qui").value = cfg.qui; $("dlgErr").textContent = "";
   $("dlg").showModal();
 }
 $("btnSettings").addEventListener("click", ouvrirReglages);
 $("btnWelcome").addEventListener("click", ouvrirReglages);
 $("btnDlgSave").addEventListener("click", async () => {
-  cfg = { repo: $("repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""), token: $("token").value.trim() };
+  cfg = { repo: $("repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""), token: $("token").value.trim(), qui: $("qui").value.trim() };
   $("dlgErr").textContent = "Vérification…";
   try {
     await gh(`/actions/workflows/${WF}`);
-    store.set("poele.repo", cfg.repo); store.set("poele.token", cfg.token);
+    store.set("poele.repo", cfg.repo); store.set("poele.token", cfg.token); store.set("poele.qui", cfg.qui);
     $("dlg").close(); demarrer();
   } catch (err) { $("dlgErr").textContent = err.notFound ? "Dépôt ou workflow introuvable" : err.message; }
 });
@@ -416,11 +451,11 @@ async function demarrer() {
   $("welcome").hidden = ok; $("app").hidden = !ok;
   if (!ok) return;
   try {
-    await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerRuns()]);
+    await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerHisto()]);
   } catch (err) { toast(err.message); }
 }
-setInterval(() => { if (cfg.token && !$("banner").classList.contains("show")) { chargerEtat().catch(() => {}); chargerRuns(); } }, 60000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token) { chargerEtat().catch(() => {}); chargerRuns(); } });
+setInterval(() => { if (cfg.token && !$("banner").classList.contains("show")) { chargerEtat().catch(() => {}); chargerHisto(); } }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token) { chargerEtat().catch(() => {}); chargerHisto(); } });
 demarrer();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
