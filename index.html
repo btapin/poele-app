@@ -315,7 +315,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 17/11 · 11h30</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 17/11 · 21h15</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -744,7 +744,7 @@ async function chargerHisto() {
     histo = JSON.parse(await gh(`/contents/historique.json?ref=etat&t=${Date.now()}`, { raw: true }));
   } catch (err) { if (!err.notFound) { $("runs").innerHTML = `<li class="rd err">${esc(err.message)}</li>`; return; } histo = []; }
   for (const e of histo.slice(0, histoMax)) {
-    const sous = [e.mode === "auto" ? "Automatique" : e.qui ? `par ${e.qui}` : "Manuel"];
+    const sous = [e.mode === "auto" ? "Automatique" : e.mode === "detecte" ? "Détecté par la surveillance" : e.qui ? `par ${e.qui}` : "Manuel"];
     if (e.temperature !== undefined && e.temperature !== null) sous.push(`${fmt(e.temperature)} °C`);
     lignes.push(`<li><span class="ri">${ICONES[e.type] || "•"}</span><span class="rt">${esc(e.texte)}<small>${esc(sous.join(" · "))}</small></span><span class="rd">${quand(e.horodatage)}</span></li>`);
   }
