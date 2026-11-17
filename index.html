@@ -315,7 +315,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 17/11 · 11h15</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 17/11 · 11h30</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -367,13 +367,36 @@ function banner(msg, zone = "banner") {
   if (msg) { $(zone).classList.add("show"); $(zone).querySelector(".bt").textContent = msg; }
   majBoutons();
 }
-/* Allumer grisé si le poêle tourne déjà, Éteindre grisé s'il est déjà éteint */
+/* Phases du poêle (codes Micronova) : 0 éteint, 1/6 nettoyage final, 2 allumage, 3 stabilisation,
+   4 en marche, 5 nettoyage du brasier, 7 veille, 8/9 alarme */
+function phasePoele(e) {
+  const st = Number(e && e.statut);
+  const t = String((e && e.etat) || "").toLowerCase();
+  if (st === 1 || st === 6 || /final clean/.test(t)) return "extinction";
+  if (st === 2 || /^start/.test(t)) return "allumage";
+  if (st === 3 || /stabil/.test(t)) return "stabilisation";
+  if (st === 5 || /brazier/.test(t)) return "brasier";
+  if (st === 7 || /stand/.test(t)) return "veille";
+  if (e && e.eteint === true) return "eteint";
+  if (e && e.eteint === false) return "marche";
+  return "inconnu";
+}
+function libellePhase(e, phase) {
+  return {
+    eteint: "Éteint", extinction: "Extinction en cours · nettoyage final", allumage: "Allumage en cours",
+    stabilisation: "Allumage · stabilisation", brasier: "En marche · nettoyage du brasier", veille: "En veille",
+    marche: "En marche", inconnu: (e && e.etat) || "Inconnu",
+  }[phase];
+}
+
+/* Allumer grisé si le poêle tourne déjà, Éteindre grisé s'il est déjà éteint ou en train de s'éteindre */
 function majBoutons() {
   const occupe = enCours;
   const eteint = dernierEtat ? dernierEtat.eteint : null;
   const enAlarme = !!(dernierEtat && (dernierEtat.alarme || /alarm/i.test(dernierEtat.etat || "")));
+  const enExtinction = !!dernierEtat && phasePoele(dernierEtat) === "extinction";
   $("btnOn").disabled = occupe || eteint === false || enAlarme;
-  $("btnOff").disabled = occupe || eteint === true || enAlarme;
+  $("btnOff").disabled = occupe || eteint === true || enAlarme || enExtinction;
   $("btnRefresh").disabled = occupe;
   if (typeof dessinerPoele === "function" && poele) dessinerPoele();
 }
@@ -394,10 +417,11 @@ function afficher(e) {
   if (dernierEtat && e.horodatage && dernierEtat.horodatage && e.horodatage < dernierEtat.horodatage) return;
   dernierEtat = e;
   const alarme = e.alarme || (/alarm/i.test(e.etat || "") ? { texte: "Alarme" } : null);
-  const on = e.eteint === false && !alarme;
+  const phase = phasePoele(e);
+  const on = e.eteint === false && !alarme && phase !== "extinction";
   $("hero").classList.toggle("on", on);
   $("hero").classList.toggle("alarme", !!alarme);
-  $("etat").textContent = alarme ? `En alarme` : e.eteint === true ? "Éteint" : on ? `En marche · ${e.etat}` : (e.etat || "Inconnu");
+  $("etat").textContent = alarme ? "En alarme" : libellePhase(e, phase);
   $("alerte").classList.toggle("show", !!alarme);
   $("alerte").innerHTML = alarme ? `<b>⚠️ ${esc(alarme.texte)}</b><br>Le poêle doit être réarmé directement sur l'appareil. Une fois réarmé, tu pourras le rallumer depuis l'appli.` : "";
   $("temp").innerHTML = `${fmt(e.temperature)}<sup>°C</sup>`;
