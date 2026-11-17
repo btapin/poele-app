@@ -129,6 +129,12 @@
   .note { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
   .linkbtn { background: none; border: 0; color: var(--fire2); font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; }
 
+  /* Notifications */
+  .checks { display: grid; gap: 10px; margin-top: 14px; }
+  .checks label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 15px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .two .save { margin-top: 0; }
+
   /* Réglages */
   dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--r);
     width: min(92vw, 440px); padding: 20px; }
@@ -221,6 +227,20 @@
       <p class="hint">Vérification toutes les 30 min. Le poêle est éteint à l'heure de fin. Plage possible : entre 6h et 22h30.</p>
     </section>
 
+    <section class="card" id="cardNotif" hidden>
+      <h2>Notifications</h2>
+      <div class="sub" id="notifTxt">--</div>
+      <div class="checks">
+        <label>🔥 Allumage et extinction <span class="switch"><input type="checkbox" id="nMarche" checked><span class="slider"></span></span></label>
+        <label>⚠️ Alarmes et poêle injoignable <span class="switch"><input type="checkbox" id="nAlarmes" checked><span class="slider"></span></span></label>
+      </div>
+      <div class="two">
+        <button class="save dirty" id="btnNotif">Activer sur ce téléphone</button>
+        <button class="save" id="btnNotifTest">Envoyer un test</button>
+      </div>
+      <p class="hint">Le poêle est surveillé toutes les 5 minutes. Chaque téléphone s'active séparément. Sur iPhone : appli installée sur l'écran d'accueil et iOS 16.4 minimum.</p>
+    </section>
+
     <section class="card">
       <h2>Historique</h2>
       <ul class="runs" id="runs"><li class="rd">Chargement…</li></ul>
@@ -237,6 +257,8 @@
   <label class="f">Dépôt GitHub (pseudo/dépôt)<input type="text" id="repo" placeholder="btapin/Po-le" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <label class="f">Jeton d'accès<input type="password" id="token" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
   <div class="sub err" id="dlgErr"></div>
+  <button class="save" id="btnDiag" type="button" style="margin-top:14px">🩺 Diagnostic du poêle</button>
+  <pre id="diag" style="display:none;white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background:var(--card2);padding:10px;border-radius:10px;margin-top:10px"></pre>
   <div class="drow">
     <button class="save" id="btnForget" type="button">Oublier</button>
     <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
@@ -366,6 +388,66 @@ async function lireDirect() {
   }
 }
 
+/* ---------- Notifications ---------- */
+const urlB64 = s => { const b = s.replace(/-/g, "+").replace(/_/g, "/"); return Uint8Array.from(atob(b + "=".repeat((4 - b.length % 4) % 4)), c => c.charCodeAt(0)); };
+const pushPossible = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+function prefsNotif() { return { marche: $("nMarche").checked, alarmes: $("nAlarmes").checked }; }
+const swPret = () => Promise.race([navigator.serviceWorker.ready,
+  new Promise((_, ko) => setTimeout(() => ko(new Error("Service de notification indisponible, recharge l'appli")), 6000))]);
+async function abonnementActuel() {
+  if (!pushPossible()) return null;
+  const reg = await swPret();
+  return reg.pushManager.getSubscription();
+}
+async function majNotif() {
+  $("cardNotif").hidden = !cfg.relais;
+  if (!cfg.relais) return;
+  try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; } catch {}
+  if (!pushPossible()) {
+    $("notifTxt").textContent = "Non disponible ici. Sur iPhone, ajoute d'abord l'appli à l'écran d'accueil (iOS 16.4 ou plus).";
+    $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
+  }
+  let ab = null, souci = "";
+  try { ab = await abonnementActuel(); } catch (err) { souci = err.message; }
+  const refuse = Notification.permission === "denied";
+  $("notifTxt").textContent = souci ? souci : ab ? "✅ Activées sur ce téléphone" : refuse ? "Bloquées : autorise les notifications pour cette appli dans les réglages du téléphone" : "Désactivées sur ce téléphone";
+  $("btnNotif").textContent = ab ? "Désactiver" : "Activer sur ce téléphone";
+  $("btnNotif").classList.toggle("dirty", !ab);
+  $("btnNotif").disabled = refuse && !ab;
+  $("btnNotifTest").disabled = !ab;
+}
+$("btnNotif").addEventListener("click", async () => {
+  $("btnNotif").disabled = true;
+  try {
+    const actuel = await abonnementActuel();
+    if (actuel) {
+      await relais("/push/desabonner", { abonnement: { endpoint: actuel.endpoint } }).catch(() => {});
+      await actuel.unsubscribe();
+      toast("Notifications désactivées sur ce téléphone");
+    } else {
+      if (await Notification.requestPermission() !== "granted") throw new Error("Notifications refusées par le téléphone");
+      const { cle } = await relais("/push/cle");
+      const reg = await swPret();
+      const ab = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(cle) });
+      await relais("/push/abonner", { abonnement: ab.toJSON(), qui: cfg.qui || "", prefs: prefsNotif() });
+      toast("✓ Notifications activées");
+    }
+  } catch (err) { toast(err.message); }
+  majNotif();
+});
+["nMarche", "nAlarmes"].forEach(id => $(id).addEventListener("change", async () => {
+  store.set("poele.notifprefs", JSON.stringify(prefsNotif()));
+  const ab = await abonnementActuel().catch(() => null);
+  if (ab) relais("/push/abonner", { abonnement: ab.toJSON(), qui: cfg.qui || "", prefs: prefsNotif() })
+    .then(() => toast("✓ Préférences enregistrées")).catch(err => toast(err.message));
+}));
+$("btnNotifTest").addEventListener("click", async () => {
+  const ab = await abonnementActuel().catch(() => null);
+  if (!ab) return;
+  try { await relais("/push/test", { abonnement: { endpoint: ab.endpoint } }); toast("Notification envoyée"); }
+  catch (err) { toast(err.message); }
+});
+
 /* ---------- Commandes ---------- */
 function lancer(action, detail = "") {
   return gh(`/actions/workflows/${WF}/dispatches`, {
@@ -388,7 +470,10 @@ async function commande(action, libelle, detail = "", zone = "banner") {
       let j;
       if (action === "status") j = await relais(`/etat?journal=1&qui=${encodeURIComponent(cfg.qui || "")}`);
       else if (action === "regler") j = await relais("/commande", { action, qui: cfg.qui || "", ...JSON.parse(detail) });
-      else j = await relais("/commande", { action, qui: cfg.qui || "" });
+      else {
+        const ab = await abonnementActuel().catch(() => null);
+        j = await relais("/commande", { action, qui: cfg.qui || "", endpoint: ab ? ab.endpoint : undefined });
+      }
       afficher(j.etat);
       fini(zone === "bannerPoele" ? `✓ Appliqué : ${j.etat.action}` : `✓ ${j.etat.action}`);
     } catch (err) {
@@ -591,6 +676,19 @@ $("btnDlgSave").addEventListener("click", async () => {
     $("dlg").close(); demarrer();
   } catch (err) { $("dlgErr").textContent = err.notFound ? "Dépôt ou workflow introuvable" : err.message; }
 });
+$("btnDiag").addEventListener("click", async () => {
+  if (!cfg.relais) { $("dlgErr").textContent = "Le diagnostic nécessite le relais Cloudflare"; return; }
+  $("diag").style.display = "block"; $("diag").textContent = "Lecture du poêle…";
+  try {
+    const j = await relais("/diag");
+    const lignes = Object.entries(j.details).map(([k, d]) =>
+      `${k} = ${d.valeur} (${d.type}, ${d.min}-${d.max})` +
+      (d.libelles ? "\n   " + d.libelles.join("\n   ") : "") +
+      (d.autorise_si ? `\n   autorisé si état ∈ [${d.autorise_si.join(", ")}]` : ""));
+    $("diag").textContent = lignes.join("\n") + "\n\nTous les réglages : " + j.registres.join(", ");
+    try { await navigator.clipboard.writeText($("diag").textContent); $("dlgErr").textContent = "Copié : tu peux le coller dans la conversation"; } catch {}
+  } catch (err) { $("diag").textContent = err.message; }
+});
 $("btnForget").addEventListener("click", () => {
   store.del("poele.token"); cfg.token = ""; $("dlg").close(); demarrer();
 });
@@ -608,6 +706,7 @@ async function demarrer() {
   try {
     await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerHisto()]);
     lireDirect();
+    majNotif();
   } catch (err) { toast(err.message); }
 }
 setInterval(() => { if (cfg.token && !enCours) { chargerEtat().catch(() => {}); chargerHisto(); } }, 60000);
