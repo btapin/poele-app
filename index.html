@@ -134,6 +134,27 @@
   .note { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
   .linkbtn { background: none; border: 0; color: var(--fire2); font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; }
 
+  /* Fenêtre de réglages */
+  dialog { max-height: 90vh; overflow: auto; }
+  .dhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .dhead .icon-btn { width: 36px; height: 36px; font-size: 16px; }
+  .bloc { border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 12px; background: var(--card2); }
+  .bloc h3 { margin: 0; font-size: 15px; }
+  .bloc input[type=text], .bloc input[type=password] { background: var(--card); }
+  .bloc .save { background: var(--card); }
+  .bloc .save.dirty { background: var(--text); }
+  details.bloc summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  details.bloc summary::-webkit-details-marker { display: none; }
+  details.bloc summary::after { content: "▾"; color: var(--muted); transition: .2s; }
+  details.bloc[open] summary::after { transform: rotate(180deg); }
+  details.bloc[open] summary { margin-bottom: 4px; }
+  .save.danger { color: var(--bad); border-color: rgba(255,107,107,.4); margin-top: 16px; }
+  .save.danger-plein { background: var(--bad) !important; color: #1a0f0f; border-color: var(--bad); }
+  .confirm { display: none; margin-top: 10px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,107,107,.4);
+    background: rgba(255,107,107,.1); font-size: 14px; }
+  .confirm.show { display: block; }
+  #btnDlgSave { margin-top: 14px; }
+
   /* Notifications */
   .checks { display: grid; gap: 10px; margin-top: 14px; }
   .checks label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 15px; }
@@ -233,20 +254,6 @@
       <p class="hint">Vérification toutes les 30 min. Le poêle est éteint à l'heure de fin. Plage possible : entre 6h et 22h30.</p>
     </section>
 
-    <section class="card" id="cardNotif" hidden>
-      <h2>Notifications</h2>
-      <div class="sub" id="notifTxt">--</div>
-      <div class="checks">
-        <label>🔥 Allumage et extinction <span class="switch"><input type="checkbox" id="nMarche" checked><span class="slider"></span></span></label>
-        <label>⚠️ Alarmes et poêle injoignable <span class="switch"><input type="checkbox" id="nAlarmes" checked><span class="slider"></span></span></label>
-      </div>
-      <div class="two">
-        <button class="save dirty" id="btnNotif">Activer sur ce téléphone</button>
-        <button class="save" id="btnNotifTest">Envoyer un test</button>
-      </div>
-      <p class="hint">Le poêle est surveillé toutes les 5 minutes. Chaque téléphone s'active séparément. Sur iPhone : appli installée sur l'écran d'accueil et iOS 16.4 minimum.</p>
-    </section>
-
     <section class="card">
       <h2>Historique</h2>
       <ul class="runs" id="runs"><li class="rd">Chargement…</li></ul>
@@ -256,19 +263,44 @@
 </main>
 
 <dialog id="dlg">
-  <h2>Réglages</h2>
-  <div class="sub">Enregistrés uniquement sur cet appareil.</div>
-  <label class="f">Adresse du relais Cloudflare (facultatif, pour des commandes en quelques secondes)<input type="text" id="relais" placeholder="https://poele.xxxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
-  <label class="f">Ton prénom (affiché dans l'historique)<input type="text" id="qui" placeholder="ex. Baptiste" autocapitalize="words"></label>
-  <label class="f">Dépôt GitHub (pseudo/dépôt)<input type="text" id="repo" placeholder="btapin/Po-le" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
-  <label class="f">Jeton d'accès<input type="password" id="token" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
-  <div class="sub err" id="dlgErr"></div>
-  <button class="save" id="btnDiag" type="button" style="margin-top:14px">🩺 Diagnostic du poêle</button>
-  <pre id="diag" style="display:none;white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background:var(--card2);padding:10px;border-radius:10px;margin-top:10px"></pre>
-  <div class="drow">
-    <button class="save" id="btnForget" type="button">Oublier</button>
-    <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
+  <div class="dhead"><h2>Réglages</h2><button class="icon-btn" id="btnDlgClose" type="button" aria-label="Fermer">✕</button></div>
+
+  <div class="bloc">
+    <h3>👤 Moi</h3>
+    <label class="f">Ton prénom (affiché dans l'historique et les notifications)<input type="text" id="qui" placeholder="ex. Baptiste" autocapitalize="words"></label>
   </div>
+
+  <div class="bloc" id="cardNotif">
+    <h3>🔔 Notifications</h3>
+    <div class="sub" id="notifTxt">--</div>
+    <div class="checks">
+      <label>🔥 Allumage et extinction <span class="switch"><input type="checkbox" id="nMarche" checked><span class="slider"></span></span></label>
+      <label>⚠️ Alarmes et poêle injoignable <span class="switch"><input type="checkbox" id="nAlarmes" checked><span class="slider"></span></span></label>
+    </div>
+    <div class="two">
+      <button class="save dirty" id="btnNotif" type="button">Activer sur ce téléphone</button>
+      <button class="save" id="btnNotifTest" type="button">Envoyer un test</button>
+    </div>
+    <p class="hint">Surveillance toutes les 5 minutes. Chaque téléphone s'active séparément. iPhone : appli sur l'écran d'accueil et iOS 16.4 minimum.</p>
+  </div>
+
+  <details class="bloc" id="avance">
+    <summary><h3>⚙️ Paramètres avancés</h3></summary>
+    <label class="f">Adresse du relais Cloudflare<input type="text" id="relais" placeholder="https://poele.xxxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="f">Dépôt GitHub (pseudo/dépôt)<input type="text" id="repo" placeholder="btapin/Po-le" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="f">Jeton d'accès<input type="password" id="token" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <button class="save danger" id="btnForget" type="button">Oublier le jeton sur ce téléphone</button>
+    <div class="confirm" id="confirmForget">
+      <div>Êtes-vous sûr de vouloir oublier le jeton ? L'appli ne pourra plus piloter le poêle tant qu'il n'aura pas été ressaisi.</div>
+      <div class="two">
+        <button class="save" id="btnForgetNo" type="button">Annuler</button>
+        <button class="save danger-plein" id="btnForgetYes" type="button">Oui, oublier</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="sub err" id="dlgErr"></div>
+  <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -411,8 +443,10 @@ async function abonnementActuel() {
   return reg.pushManager.getSubscription();
 }
 async function majNotif() {
-  $("cardNotif").hidden = !cfg.relais;
-  if (!cfg.relais) return;
+  if (!cfg.relais) {
+    $("notifTxt").textContent = "Nécessite le relais Cloudflare (voir Paramètres avancés)";
+    $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
+  }
   try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; } catch {}
   if (!pushPossible()) {
     $("notifTxt").textContent = "Non disponible ici. Sur iPhone, ajoute d'abord l'appli à l'écran d'accueil (iOS 16.4 ou plus).";
@@ -674,8 +708,12 @@ $("btnMore").addEventListener("click", () => { histoMax += 20; chargerHisto(); }
 /* ---------- Réglages (jeton) ---------- */
 function ouvrirReglages() {
   $("repo").value = cfg.repo; $("token").value = cfg.token; $("qui").value = cfg.qui; $("relais").value = cfg.relais; $("dlgErr").textContent = "";
+  $("confirmForget").classList.remove("show");
+  $("avance").open = !cfg.token;          // première utilisation : on ouvre directement les paramètres avancés
   $("dlg").showModal();
+  majNotif();
 }
+$("btnDlgClose").addEventListener("click", () => $("dlg").close());
 $("btnSettings").addEventListener("click", ouvrirReglages);
 $("btnWelcome").addEventListener("click", ouvrirReglages);
 $("btnDlgSave").addEventListener("click", async () => {
@@ -687,21 +725,10 @@ $("btnDlgSave").addEventListener("click", async () => {
     $("dlg").close(); demarrer();
   } catch (err) { $("dlgErr").textContent = err.notFound ? "Dépôt ou workflow introuvable" : err.message; }
 });
-$("btnDiag").addEventListener("click", async () => {
-  if (!cfg.relais) { $("dlgErr").textContent = "Le diagnostic nécessite le relais Cloudflare"; return; }
-  $("diag").style.display = "block"; $("diag").textContent = "Lecture du poêle…";
-  try {
-    const j = await relais("/diag");
-    const lignes = Object.entries(j.details).map(([k, d]) =>
-      `${k} = ${d.valeur} (${d.type}, ${d.min}-${d.max})` +
-      (d.libelles ? "\n   " + d.libelles.join("\n   ") : "") +
-      (d.autorise_si ? `\n   autorisé si état ∈ [${d.autorise_si.join(", ")}]` : ""));
-    $("diag").textContent = lignes.join("\n") + "\n\nTous les réglages : " + j.registres.join(", ");
-    try { await navigator.clipboard.writeText($("diag").textContent); $("dlgErr").textContent = "Copié : tu peux le coller dans la conversation"; } catch {}
-  } catch (err) { $("diag").textContent = err.message; }
-});
-$("btnForget").addEventListener("click", () => {
-  store.del("poele.token"); cfg.token = ""; $("dlg").close(); demarrer();
+$("btnForget").addEventListener("click", () => $("confirmForget").classList.add("show"));
+$("btnForgetNo").addEventListener("click", () => $("confirmForget").classList.remove("show"));
+$("btnForgetYes").addEventListener("click", () => {
+  store.del("poele.token"); cfg.token = ""; $("confirmForget").classList.remove("show"); $("dlg").close(); demarrer();
 });
 
 /* ---------- Démarrage ---------- */
