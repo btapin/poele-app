@@ -321,7 +321,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 17/11 · 22h40</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 18/11 · 16h20</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -727,7 +727,7 @@ $("auto").addEventListener("change", async () => {
 });
 
 /* ---------- Historique ---------- */
-const ICONES = { allumage: "🔥", extinction: "❄️", releve: "🌡️", reglages: "⚙️", rien: "ℹ️", erreur: "⚠️" };
+const ICONES = { allumage: "🔥", extinction: "❄️", releve: "🌡️", reglages: "⚙️", rien: "ℹ️", erreur: "⚠️", injoignable: "📡", reconnexion: "📡" };
 let histo = [], histoMax = 8;
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function quand(iso) {
