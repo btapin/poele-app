@@ -106,6 +106,13 @@
   .rt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 1px; }
   .rd { white-space: nowrap; }
   li.warn { color: var(--fire2); }
+  .onglets { display: flex; gap: 4px; background: var(--card2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; flex: 1; margin-right: 10px; }
+  .onglets button { flex: 1; padding: 8px 2px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; white-space: nowrap; font-weight: 600; }
+  .onglets button.sel { background: var(--fire); color: #1a120b; }
+  .jour { display: flex; justify-content: space-between; color: var(--fire2); font-size: 13px; font-weight: 600; padding: 12px 0 4px; }
+  ul.runs .jour:first-child { padding-top: 0; }
+  ul.runs li.jour { border-top: 0; }
+  .duree { font-weight: 700; white-space: nowrap; }
   .more { width: 100%; margin-top: 8px; padding: 10px; background: transparent; border: 1px dashed var(--line);
     border-radius: 12px; color: var(--muted); font-weight: 600; cursor: pointer; }
 
@@ -273,10 +280,14 @@
 
     <section class="card">
       <div class="row" style="margin-bottom:12px">
-        <h2 style="margin:0">Historique</h2>
+        <div class="onglets" role="tablist">
+          <button class="sel" data-onglet="evts" role="tab">Événements</button>
+          <button data-onglet="chauffes" role="tab">Temps de chauffe</button>
+        </div>
         <button class="icon-btn petit" id="btnHisto" aria-label="Rafraîchir l'historique">↻</button>
       </div>
       <ul class="runs" id="runs"><li class="rd">Chargement…</li></ul>
+      <ul class="runs" id="chauffes" hidden><li class="rd">Chargement…</li></ul>
       <button class="more" id="btnMore" hidden>Voir plus</button>
     </section>
   </div>
@@ -321,7 +332,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 18/11 · 16h20</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 00h10</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -737,7 +748,7 @@ function quand(iso) {
   if (d.toDateString() === hier.toDateString()) return `Hier ${h}`;
   return `${d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} ${h}`;
 }
-async function chargerHisto() {
+async function chargerEvenements() {
   const lignes = [];
   try {
     // Commandes en cours ou dernière exécution en échec (avant même que le script écrive l'historique)
@@ -757,8 +768,60 @@ async function chargerHisto() {
   $("runs").innerHTML = lignes.join("") || `<li class="rd">Aucun événement pour l'instant</li>`;
   $("btnMore").hidden = histo.length <= histoMax;
 }
-$("btnMore").addEventListener("click", () => { histoMax += 20; chargerHisto(); });
-// Rafraîchit uniquement l'historique (sans relire le poêle)
+/* ---------- Temps de chauffe ---------- */
+let onglet = "evts", chauffes = { liste: [], enCours: null }, chauffesMax = 10;
+const ORIGINES = o => o === "auto" ? "Automatique" : o === "detecte" ? "Détecté" : o === "alarme" ? "Alarme" : o || "Manuel";
+const duree = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+const heure = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+function nomJour(iso) {
+  const d = new Date(iso), auj = new Date(), hier = new Date(Date.now() - 864e5);
+  if (d.toDateString() === auj.toDateString()) return "Aujourd'hui";
+  if (d.toDateString() === hier.toDateString()) return "Hier";
+  const t = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function temps(a, b) {
+  const ok = v => v !== undefined && v !== null;
+  if (ok(a) && ok(b)) return `${fmt(a)} → ${fmt(b)}\u00a0°C`;
+  return ok(a) ? `${fmt(a)} °C au départ` : ok(b) ? `${fmt(b)} °C à l'arrêt` : "";
+}
+async function chargerChauffes() {
+  try {
+    chauffes = JSON.parse(await gh(`/contents/chauffes.json?ref=etat&t=${Date.now()}`, { raw: true }));
+  } catch (err) { if (!err.notFound) { $("chauffes").innerHTML = `<li class="rd err">${esc(err.message)}</li>`; return; } chauffes = {}; }
+  const liste = chauffes.liste || [], lignes = [];
+  if (chauffes.enCours) {
+    const c = chauffes.enCours, m = Math.max(0, Math.round((Date.now() - Date.parse(c.debut)) / 60000));
+    lignes.push(`<li class="warn"><span class="ri">🔥</span><span class="rt">En cours depuis ${heure(c.debut)}<small>${esc([ORIGINES(c.origineDebut), temps(c.tempDebut)].filter(Boolean).join(" · "))}</small></span><span class="duree">${duree(m)}</span></li>`);
+  }
+  const vues = liste.slice(0, chauffesMax), parJour = new Map();
+  for (const c of liste) { const j = new Date(c.debut).toDateString(); const t = parJour.get(j) || { n: 0, m: 0 }; t.n++; t.m += c.minutes || 0; parJour.set(j, t); }
+  let jourCourant = null;
+  for (const c of vues) {
+    const j = new Date(c.debut).toDateString();
+    if (j !== jourCourant) {
+      jourCourant = j; const t = parJour.get(j);
+      lignes.push(`<li class="jour"><span>${nomJour(c.debut)}</span><span>${t.n} chauffe${t.n > 1 ? "s" : ""} · ${duree(t.m)}</span></li>`);
+    }
+    const sous = [`${ORIGINES(c.origineDebut)} → ${ORIGINES(c.origineFin)}`.replace(/^(.+) → \1$/, "$1"), temps(c.tempDebut, c.tempFin)].filter(Boolean);
+    lignes.push(`<li><span class="ri">⏱️</span><span class="rt">${heure(c.debut)} → ${heure(c.fin)}<small>${esc(sous.join(" · "))}</small></span><span class="duree">${duree(c.minutes || 0)}</span></li>`);
+  }
+  $("chauffes").innerHTML = lignes.join("") || `<li class="rd">Aucune chauffe enregistrée pour l'instant. Elles apparaîtront à partir du prochain allumage.</li>`;
+  if (onglet === "chauffes") $("btnMore").hidden = liste.length <= chauffesMax;
+}
+function montrerOnglet(o) {
+  onglet = o;
+  document.querySelectorAll(".onglets button").forEach(b => b.classList.toggle("sel", b.dataset.onglet === o));
+  $("runs").hidden = o !== "evts"; $("chauffes").hidden = o !== "chauffes";
+  $("btnMore").hidden = o === "evts" ? histo.length <= histoMax : (chauffes.liste || []).length <= chauffesMax;
+}
+document.querySelectorAll(".onglets button").forEach(b => b.addEventListener("click", () => montrerOnglet(b.dataset.onglet)));
+async function chargerHisto() { await Promise.all([chargerEvenements(), chargerChauffes()]); montrerOnglet(onglet); }
+$("btnMore").addEventListener("click", () => {
+  if (onglet === "evts") { histoMax += 20; chargerEvenements().then(() => montrerOnglet(onglet)); }
+  else { chauffesMax += 20; chargerChauffes(); }
+});
+// Rafraîchit uniquement l'historique et les chauffes (sans relire le poêle)
 $("btnHisto").addEventListener("click", async () => {
   $("btnHisto").classList.add("tourne");
   try { await chargerHisto(); } finally { setTimeout(() => $("btnHisto").classList.remove("tourne"), 300); }
