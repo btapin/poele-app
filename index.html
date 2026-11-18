@@ -17,6 +17,7 @@
     --cold: #6fb7ff; --ok: #5fcf8a; --bad: #ff6b6b;
     --r: 18px;
   }
+  html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -88,7 +89,7 @@
   .stepper output { flex: 1; text-align: center; font-weight: 700; font-size: 17px; }
   input[type=time], input[type=text], input[type=password] { width: 100%; margin-top: 6px; padding: 11px 12px;
     background: var(--card2); border: 1px solid var(--line); border-radius: 12px; color: var(--text);
-    font: inherit; font-weight: 600; }
+    font: inherit; font-weight: 600; font-size: 16px; }
   input[type=time] { color-scheme: dark; }
   .save { width: 100%; margin-top: 14px; padding: 13px; border-radius: 12px; border: 1px solid var(--line);
     background: var(--card2); color: var(--text); font-weight: 700; font-size: 15px; cursor: pointer; }
@@ -105,6 +106,7 @@
   .rd { color: var(--muted); font-size: 13px; }
   .rt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 1px; }
   .rd { white-space: nowrap; }
+  ul.runs li.rd { white-space: normal; display: block; }
   li.warn { color: var(--fire2); }
   .onglets { display: flex; gap: 4px; background: var(--card2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; flex: 1; margin-right: 10px; }
   .onglets button { flex: 1; padding: 8px 2px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; white-space: nowrap; font-weight: 600; }
@@ -332,7 +334,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 00h10</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 00h20</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
