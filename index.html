@@ -195,6 +195,97 @@
     font-size: 14px; transition: .25s; max-width: 90vw; z-index: 10; opacity: 0; visibility: hidden; }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
   .welcome p { color: var(--muted); font-size: 15px; }
+
+  /* ---------- Navigation Poêle / Granulés ---------- */
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; justify-content: center; gap: 8px;
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); background: rgba(22,19,15,.92); backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
+  .nav button { flex: 1; max-width: 220px; padding: 10px; border: 0; border-radius: 12px; background: transparent; color: var(--muted);
+    font: inherit; font-weight: 700; font-size: 15px; }
+  .nav button.sel { background: var(--card2); color: var(--text); }
+  body.avec-nav main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  body.avec-nav .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+  /* ---------- Granulés ---------- */
+  #vueGranules { padding-bottom: 64px; }
+  .gfiltres { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .gfiltres .gchips { flex: 1; }
+  .gchips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .gchips button, .gradio span { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; }
+  .gchips button.sel, .gradio input:checked + span { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .gchips i, .gleg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .gchips.petit button { padding: 6px 10px; font-size: 13px; }
+  .gradio input { position: absolute; opacity: 0; pointer-events: none; }
+  .gfiltreh { margin-bottom: 12px; }
+  .gonglets { margin: 0 0 12px; }
+  .gportee { margin: 0 0 12px; }
+  .icon-btn.petit { width: 38px; height: 38px; font-size: 17px; flex: none; }
+  .gstock { background: radial-gradient(120% 90% at 85% 0%, rgba(74,152,224,.18), transparent 60%), var(--card); }
+  .gstock.orange { background: radial-gradient(120% 90% at 85% 0%, rgba(255,179,71,.22), transparent 60%), var(--card); }
+  .gstock.rouge { background: radial-gradient(120% 90% at 85% 0%, rgba(255,107,107,.25), transparent 60%), var(--card); border-color: rgba(255,107,107,.5); }
+  .gbig { font-size: 44px; font-weight: 700; line-height: 1.05; letter-spacing: -1px; }
+  .gbig small { font-size: 15px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+  .gfin { font-weight: 700; margin-top: 4px; }
+  .gbadge { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--card2); border: 1px solid var(--line);
+    font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .gbadge.vert { color: var(--ok); border-color: rgba(95,207,138,.45); }
+  .gbadge.orange { color: var(--fire2); border-color: rgba(255,179,71,.45); }
+  .gjauge { height: 8px; border-radius: 99px; background: var(--card2); margin: 14px 0 6px; overflow: hidden; }
+  .gjauge span { display: block; height: 100%; border-radius: 99px; background: #4a98e0; }
+  .orange .gjauge span, .gjauge.orange span { background: var(--fire2); }
+  .rouge .gjauge span { background: var(--bad); }
+  .gjauge.fine { height: 6px; margin: 8px 0 4px; }
+  .gtuiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .gtuiles.trois { grid-template-columns: repeat(3, 1fr); margin: 4px 0 6px; }
+  .gtuile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; text-align: left; color: var(--text); font: inherit; }
+  .gtuiles.trois .gtuile { background: var(--card2); padding: 10px; }
+  .gtuile b { font-size: 22px; }
+  .gtuile small { color: var(--muted); }
+  .gtuile .sub { font-size: 12px; margin-bottom: 4px; }
+  .gtuile.large { grid-column: 1 / -1; }
+  .gsvg { width: 100%; height: auto; display: block; margin-top: 10px; overflow: visible; }
+  .gsvg .glab { font-size: 10px; fill: var(--muted); text-anchor: middle; }
+  .gsvg .glab.fort { fill: var(--text); font-weight: 700; }
+  .gsvg .gval { font-size: 10px; fill: var(--text); text-anchor: middle; font-weight: 600; }
+  .gleg { display: flex; gap: 14px; justify-content: center; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .gleg span { display: inline-flex; align-items: center; gap: 6px; }
+  .gmois { padding: 14px 16px; }
+  .gmois summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .gmois summary::-webkit-details-marker { display: none; }
+  .gmois summary::after { content: "▾"; color: var(--muted); transition: .2s; }
+  .gmois[open] summary::after { transform: rotate(180deg); }
+  .gmois .runs { margin-top: 8px; }
+  .gligne { cursor: pointer; }
+  .gligne .rd { text-align: right; }
+  .gheat { display: grid; gap: 4px; }
+  .gh-t { font-size: 11px; color: var(--muted); text-align: center; }
+  .gh-c { border: 1px solid var(--line); border-radius: 7px; background: var(--card2); color: var(--muted); font: inherit; font-size: 10px; padding: 7px 0; }
+  .gh-c.sel { outline: 2px solid var(--text); outline-offset: 1px; color: var(--text); }
+  .gmarque { margin-top: 10px; }
+  .gduree { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .gduree:last-of-type { border-bottom: 0; }
+  .gent .gboutons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .gfait { padding: 10px 14px !important; font-size: 14px !important; }
+  .gent.annuel { background: radial-gradient(120% 90% at 85% 0%, rgba(95,207,138,.14), transparent 60%), var(--card); }
+  .gfab { position: fixed; right: max(18px, calc(50% - 222px)); bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 15;
+    width: 58px; height: 58px; border-radius: 50%; border: 0; font-size: 28px; font-weight: 700; color: #1a120b;
+    background: linear-gradient(135deg, var(--fire2), var(--fire)); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .gform input[type=number], .gform input[type=date], .gform input[type=text], .gform select { width: 100%; margin-top: 6px; padding: 11px 12px;
+    background: var(--card2); border: 1px solid var(--line); border-radius: 12px; color: var(--text); font: inherit; font-weight: 600;
+    font-size: 16px; color-scheme: dark; min-width: 0; }
+  .gform .f { display: block; font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .gform .f .gchips { margin-top: 6px; }
+  .gform .two { margin-top: 0; }
+  .gform .stepper output { color: var(--text); }
+  .gform .gvalider { width: 100%; margin-top: 18px; }
+  .gsacs { display: flex; gap: 6px; align-items: center; }
+  .gsacs input { flex: 1; }
+  .gsacs .small-btn { margin-top: 6px; padding: 11px 10px; }
+  .gchoix { display: grid; gap: 10px; margin-top: 10px; }
+  .gmarq { margin-top: 8px; }
+  .gmarq input { width: 90px !important; flex: none; text-align: center; }
+  .bloc .gform input, .gform .bloc input, .gform .bloc select { background: var(--card); }
 </style>
 </head>
 <body>
@@ -213,6 +304,7 @@
     <button class="main b-on" style="width:100%" id="btnWelcome">Saisir le jeton</button>
   </section>
 
+  <div id="vueGranules" hidden></div>
   <div id="app" hidden>
     <section class="card hero" id="hero">
       <span class="pill"><span class="dot"></span><span id="etat">—</span></span>
@@ -335,10 +427,15 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 14h50</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 23h30</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
+<nav class="nav" id="nav" hidden>
+  <button class="sel" data-nav="poele">🔥 Poêle</button>
+  <button data-nav="granules">🪵 Granulés</button>
+</nav>
+<dialog id="gSheet"></dialog>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -450,7 +547,7 @@ function afficher(e) {
   $("derniere").textContent = e.action && !/^(Consigne|Puissance|Ventilation)/.test(e.action) ? `Dernière action : ${e.action}` : "";
   majBoutons();
   rendrePoele(e);
-  if (e.nom) { $("nom").textContent = `Poêle · ${e.nom}`; document.title = `Poêle · ${e.nom}`; }
+  if (e.nom) { window.nomPoele = `Poêle · ${e.nom}`; if (vue === "poele") $("nom").textContent = window.nomPoele; document.title = `Poêle · ${e.nom}`; }
 }
 
 async function chargerEtat() {
@@ -465,6 +562,7 @@ async function chargerEtat() {
   }
 }
 
+let vue = "poele";
 /* ---------- Relais Cloudflare ---------- */
 async function relais(chemin, corps) {
   const res = await fetch(cfg.relais + chemin, {
@@ -884,7 +982,8 @@ $("btnSave").addEventListener("click", enregistrerReglages);
 
 async function demarrer() {
   const ok = !!cfg.token;
-  $("welcome").hidden = ok; $("app").hidden = !ok;
+  $("welcome").hidden = ok; $("nav").hidden = !ok; document.body.classList.toggle("avec-nav", ok);
+  montrerVue(store.get("poele.vue") === "granules" ? "granules" : "poele");
   if (!ok) return;
   try {
     await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerHisto()]);
@@ -899,8 +998,22 @@ document.addEventListener("visibilitychange", () => {
   chargerEtat().catch(() => {}); chargerHisto();
   if (Date.now() - derniereLecture > 120000) { derniereLecture = Date.now(); lireDirect(); }
 });
+/* ---------- Navigation Poêle / Granulés ---------- */
+function montrerVue(v) {
+  vue = v; store.set("poele.vue", v);
+  document.querySelectorAll("[data-nav]").forEach(b => b.classList.toggle("sel", b.dataset.nav === v));
+  const ok = !!cfg.token;
+  $("app").hidden = !ok || v !== "poele";
+  $("vueGranules").hidden = !ok || v !== "granules";
+  $("nom").textContent = v === "granules" ? "Granulés" : (window.nomPoele || "Poêle");
+  document.querySelector("header small").textContent = v === "granules" ? "Stock, consommation et entretien" : "Pilotage à distance";
+  if (v === "granules" && ok && window.granules) { if (!granules.estCharge()) granules.rendre(); granules.charger(); }
+  window.scrollTo({ top: 0 });
+}
+document.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => montrerVue(b.dataset.nav)));
 demarrer();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
+<script src="granules.js"></script>
 </body>
 </html>
