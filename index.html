@@ -591,7 +591,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 20/11 · 08h30</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 23h20</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -1153,7 +1153,7 @@ $("btnSave").addEventListener("click", enregistrerReglages);
 async function demarrer() {
   const ok = !!cfg.token;
   $("welcome").hidden = ok; $("nav").hidden = !ok; document.body.classList.toggle("avec-nav", ok);
-  montrerVue(["tableau", "historique", "stats", "entretiens"].includes(store.get("poele.vue")) ? store.get("poele.vue") : "poele");
+  montrerVue("poele");   // l'appli s'ouvre toujours sur le poêle ; Granulés rouvre le dernier onglet consulté
   if (!ok) return;
   try {
     await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerHisto()]);

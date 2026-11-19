@@ -21,7 +21,7 @@ let D = null, chauffes = null, meteo = null;
 let ecriture = false;
 const infos = {};            // textes affichés au toucher d'une barre / d'un point
 const etat = {
-  vue: ["tableau", "historique", "stats", "entretiens"].includes(store.get("poele.vue")) ? store.get("poele.vue") : "tableau",
+  vue: ["tableau", "historique", "stats", "entretiens"].includes(store.get("g.derniere")) ? store.get("g.derniere") : "tableau",
   poele: store.get("g.poele") || "tous",
   portee: store.get("g.portee") || "saison",
   graphe: store.get("g.graphe") || "7j", moyenne: "7j", filtreHisto: "tous", saisonStats: null, ouverts: new Set(),
