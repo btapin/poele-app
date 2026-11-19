@@ -98,6 +98,28 @@ function moyenneKgJour(periode) {
   const jours = ecartJours(debut, auj) + 1, kg = somme(l) * R().kgSac;
   return { kg: kg / jours, total: kg, jours, sacs: somme(l), debut };
 }
+/** Coût de chaque sac brûlé : les sacs les plus anciens d'une marque partent en premier (premier acheté, premier brûlé).
+    Renvoie une Map id du brûlage -> coût en €. Le stock initial (sans prix) est compté au prix moyen. */
+function coutsBrulages() {
+  const pm = prixMoyenGlobal() || 0, lots = {}, couts = new Map();
+  for (const [m, n] of Object.entries(R().stockInitial || {})) (lots[m] = lots[m] || []).push({ reste: Number(n) || 0, prix: pm });
+  const evts = [...D.achats.map(a => ({ t: 0, e: a })), ...D.brulages.map(b => ({ t: 1, e: b }))]
+    .sort((x, y) => x.e.date < y.e.date ? -1 : x.e.date > y.e.date ? 1 : x.t - y.t);
+  for (const { t, e } of evts) {
+    const l = lots[e.marque] = lots[e.marque] || [];
+    if (t === 0) { l.push({ reste: e.sacs, prix: e.prixSac ?? pm }); continue; }
+    let besoin = e.sacs, cout = 0;
+    while (besoin > 1e-9 && l.length) {
+      const lot = l[0], pris = Math.min(lot.reste, besoin);
+      cout += pris * lot.prix; lot.reste -= pris; besoin -= pris;
+      if (lot.reste <= 1e-9) l.shift();
+    }
+    cout += besoin * pm;            // sacs sans achat correspondant : prix moyen
+    couts.set(e.id, cout);
+  }
+  return couts;
+}
+const coutDe = (liste, couts = coutsBrulages()) => liste.reduce((x, b) => x + (couts.get(b.id) || 0), 0);
 function prixMoyenGlobal() {
   const l = D.achats.filter(a => a.prixSac); const s = somme(l);
   return s ? somme(l, prixAchat) / s : null;
@@ -394,12 +416,12 @@ function detail(type) {
       ${parMarque(achats).map(([m, n]) => ligne(`🏷️ ${esc(m)}`, type === "achats" ? `${sacsTxt(n)} (${kg(n)})` : `${euros(somme(achats.filter(a => a.marque === m), prixAchat))} · ${moyennePrix(achats.filter(a => a.marque === m)) ? euros(moyennePrix(achats.filter(a => a.marque === m))) + "/sac" : "--"}`)).join("")}</div>
       ${type === "depenses" ? `<div class="gtotal">Coût total : ${euros(somme(achats, prixAchat))}</div><div class="sub gcentre">Prix moyen : ${moyennePrix(achats) ? euros(moyennePrix(achats)) + " / sac" : "--"}</div>` : ""}`;
   } else if (type === "brules") {
-    const pm = prixMoyenGlobal(), cout = pm ? somme(brul) * pm : null;
+    const pm = prixMoyenGlobal(), cout = D.achats.some(a => a.prixSac) ? coutDe(brul) : null;
     ico = "🔥"; titre = "Détail des brûlages"; teinte = "orange";
     corps = `<div class="gbloc">${ligne("🔥 Brûlés", `<b>${sacsTxt(somme(brul))}</b>`)}${ligne("⚖️ Poids", kg(somme(brul)))}${ligne("💶 Coût estimé", `<b class="vert">${cout !== null ? euros(cout) : "--"}</b>`)}</div>
       ${etat.poele === "tous" ? `<div class="gbloc"><div class="gtit">Par poêle</div>${D.poeles.map(p => ligne(`<i class="gpt" style="background:${COULEUR[p.id]}"></i>${esc(courtPoele(p.id))}`, sacsTxt(somme(brul.filter(b => b.poele === p.id))))).join("")}</div>` : ""}
       <div class="gbloc"><div class="gtit">Par marque</div>${parMarque(brul).map(([m, n]) => ligne(`🏷️ ${esc(m)}`, `${sacsTxt(n)} (${kg(n)})`)).join("") || '<div class="sub">--</div>'}</div>
-      <div class="sub gpetit">Coût estimé avec le prix moyen payé (${pm ? euros(pm) : "--"} / sac). Période : ${libellePortee()}.</div>`;
+      <div class="sub gpetit">Coût calculé au prix réellement payé : les sacs achetés en premier sont comptés comme brûlés en premier. Prix moyen payé : ${pm ? euros(pm) : "--"} / sac. Période : ${libellePortee()}.</div>`;
   } else if (type === "moyenne") {
     const m = moyenneKgJour(etat.moyenne);
     const lib = { "7j": "les 7 derniers jours", mois: "le mois en cours", saison: "la saison de chauffe" }[etat.moyenne];
@@ -502,7 +524,7 @@ function vueStats() {
   const cles = clesPoeles();
   const brS = D.brulages.filter(b => anneeSaison(b.date) === sel && dePoele(b));
   const acS = D.achats.filter(a => anneeSaison(a.date) === sel);
-  const mois = moisSaison(sel);
+  const mois = moisSaison(sel), couts = coutsBrulages();
   const premierMois = (a, m) => `${a}-${pad(m)}`;
   let h = `<div class="gpilule"><span>📅</span><select id="gSaisonStats">${saisons.slice().reverse().map(a => `<option value="${a}" ${a === sel ? "selected" : ""}>Saison ${a === saisonCourante() ? "courante" : nomSaison(a)} : ${MOIS[R().saisonDebut - 1]} ${a} - ${MOIS[R().saisonFin - 1]} ${a + 1}</option>`).join("")}</select></div>`;
 
@@ -511,16 +533,17 @@ function vueStats() {
   const cols = mois.map(({ a, m }) => {
     const k = premierMois(a, m), kp = premierMois(a - 1, m);
     const l = brS.filter(b => b.date.startsWith(k)), lp = D.brulages.filter(b => b.date.startsWith(kp) && dePoele(b));
-    const ac = acS.filter(x => x.date.startsWith(k)), acp = D.achats.filter(x => x.date.startsWith(kp));
+    const ce = coutDe(l, couts), cp = coutDe(lp, couts);
+    const finMois = `${a}-${pad(m)}-${pad(new Date(a, m, 0).getDate())}`, jours = Math.max(1, Math.min(new Date(a, m, 0).getDate(), ecartJours(`${a}-${pad(m)}-01`, aujourdhui()) + 1));
     const t = tempMois(a, m), tp = tempMois(a - 1, m);
     return sacs
       ? { lab: MOIS_COURT[m - 1], valeurs: valeursPoeles(l), fantome: somme(lp),
           info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${sacsTxt(somme(l))}${t !== null ? ` (${temp(t)})` : ""}${avecChauffe() && `${k}-31` >= debutJournal() ? ` · ⏱️ ${duree(minutesChauffe(`${k}-01`, `${k}-31`))} de chauffe` : ""}<br>${nomSaison(prec)} : ${sacsTxt(somme(lp))}${tp !== null ? ` (${temp(tp)})` : ""}` }
-      : { lab: MOIS_COURT[m - 1], valeurs: { e: Math.round(somme(ac, prixAchat)) }, fantome: Math.round(somme(acp, prixAchat)),
-          info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${euros(somme(ac, prixAchat))}<br>${nomSaison(prec)} : ${euros(somme(acp, prixAchat))}` };
+      : { lab: MOIS_COURT[m - 1], valeurs: { e: Math.round(ce) }, fantome: Math.round(cp),
+          info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${euros(ce)} de granulés brûlés${ce && `${a}-${pad(m)}-01` <= aujourdhui() ? ` · soit ${euros(ce / (finMois <= aujourdhui() ? new Date(a, m, 0).getDate() : jours))} / jour` : ""}<br>${nomSaison(prec)} : ${euros(cp)}` };
   });
   h += `<section class="gcarte">
-    <div class="gseg">${[["sacs", "🔥 Sacs brûlés"], ["euros", "€ Dépenses"]].map(([id, l]) => `<button data-gstatmois="${id}" class="${etat.statMois === id ? "sel" + (id === "euros" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
+    <div class="gseg">${[["sacs", "🔥 Sacs brûlés"], ["euros", "€ Coût brûlé"]].map(([id, l]) => `<button data-gstatmois="${id}" class="${etat.statMois === id ? "sel" + (id === "euros" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
     ${legende([pastille(C_PASSE, nomSaison(prec)), ...(sacs ? (cles.length > 1 ? cles.map(k => pastille(COULEUR[k], `${nomSaison(sel)} · ${courtPoele(k)}`)) : [pastille(COULEUR[cles[0]], nomSaison(sel))]) : [pastille(C_EUROS, nomSaison(sel))]),
       `<button class="gmeteo${etat.meteoGraphe ? " sel" : ""}" data-gmeteo="1">🌡️ Météo ${etat.meteoGraphe ? "✓" : ""}</button>`])}
     ${barres(cols, { cle: "mois", cles: sacs ? cles : ["e"], couleurs: sacs ? COULEUR : { e: C_EUROS }, unite: sacs ? "" : "€",
@@ -1039,7 +1062,28 @@ $("vueGranules").addEventListener("toggle", ev => {
   if (ev.target.open) { etat.ouverts.add(k); etat.ouverts.delete("!" + k); } else { etat.ouverts.delete(k); etat.ouverts.add("!" + k); }
 }, true);
 
-function vue(v) { etat.vue = v; store.set("g.vue", v); rendre(); }
+/* Changement d'onglet en faisant glisser l'écran vers la gauche ou la droite */
+const ORDRE = ["tableau", "historique", "stats", "entretiens"];
+let toucheX = null, toucheY = null;
+$("vueGranules").addEventListener("touchstart", e => {
+  if (e.touches.length !== 1 || e.target.closest("select, input, .gzone, .gheat")) { toucheX = null; return; }
+  toucheX = e.touches[0].clientX; toucheY = e.touches[0].clientY;
+}, { passive: true });
+$("vueGranules").addEventListener("touchend", e => {
+  if (toucheX === null) return;
+  const dx = e.changedTouches[0].clientX - toucheX, dy = e.changedTouches[0].clientY - toucheY;
+  toucheX = null;
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+  const i = ORDRE.indexOf(etat.vue) + (dx < 0 ? 1 : -1);
+  if (i < 0 || i >= ORDRE.length || typeof montrerVue !== "function") return;
+  etat.sens = dx < 0 ? "gauche" : "droite";
+  montrerVue(ORDRE[i]);
+}, { passive: true });
+function vue(v) {
+  etat.vue = v; store.set("g.vue", v); rendre();
+  const z = $("vueGranules");
+  if (etat.sens) { z.classList.remove("gentre-gauche", "gentre-droite"); void z.offsetWidth; z.classList.add(`gentre-${etat.sens}`); etat.sens = null; }
+}
 window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token && !$("vueGranules").hidden && !ecriture) charger(); });
 if (cfg.token && !$("vueGranules").hidden) { rendre(); charger(); }
