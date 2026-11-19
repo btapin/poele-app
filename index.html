@@ -309,6 +309,7 @@
     <div class="checks">
       <label>🔥 Allumage et extinction <span class="switch"><input type="checkbox" id="nMarche" checked><span class="slider"></span></span></label>
       <label>⚠️ Alarmes et poêle injoignable <span class="switch"><input type="checkbox" id="nAlarmes" checked><span class="slider"></span></span></label>
+      <label>⚙️ Changements de réglages <span class="switch"><input type="checkbox" id="nReglages" checked><span class="slider"></span></span></label>
     </div>
     <div class="two">
       <button class="save dirty" id="btnNotif" type="button">Activer sur ce téléphone</button>
@@ -334,7 +335,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 00h20</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 14h50</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -492,7 +493,13 @@ async function lireDirect() {
 /* ---------- Notifications ---------- */
 const urlB64 = s => { const b = s.replace(/-/g, "+").replace(/_/g, "/"); return Uint8Array.from(atob(b + "=".repeat((4 - b.length % 4) % 4)), c => c.charCodeAt(0)); };
 const pushPossible = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-function prefsNotif() { return { marche: $("nMarche").checked, alarmes: $("nAlarmes").checked }; }
+function prefsNotif() { return { marche: $("nMarche").checked, alarmes: $("nAlarmes").checked, reglages: $("nReglages").checked }; }
+/** Prévient les autres téléphones d'un changement de réglage (sans bloquer l'appli si le relais ne répond pas) */
+async function annoncer(texte) {
+  if (!cfg.relais || !texte) return;
+  const ab = await abonnementActuel().catch(() => null);
+  relais("/annonce", { qui: cfg.qui || "", texte, endpoint: ab ? ab.endpoint : undefined }).catch(() => {});
+}
 const swPret = () => Promise.race([navigator.serviceWorker.ready,
   new Promise((_, ko) => setTimeout(() => ko(new Error("Service de notification indisponible, recharge l'appli")), 6000))]);
 async function abonnementActuel() {
@@ -505,7 +512,7 @@ async function majNotif() {
     $("notifTxt").textContent = "Nécessite le relais Cloudflare (voir Paramètres avancés)";
     $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
   }
-  try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; } catch {}
+  try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; $("nReglages").checked = p.reglages !== false; } catch {}
   if (!pushPossible()) {
     $("notifTxt").textContent = "Non disponible ici. Sur iPhone, ajoute d'abord l'appli à l'écran d'accueil (iOS 16.4 ou plus).";
     $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
@@ -538,7 +545,7 @@ $("btnNotif").addEventListener("click", async () => {
   } catch (err) { toast(err.message); }
   majNotif();
 });
-["nMarche", "nAlarmes"].forEach(id => $(id).addEventListener("change", async () => {
+["nMarche", "nAlarmes", "nReglages"].forEach(id => $(id).addEventListener("change", async () => {
   store.set("poele.notifprefs", JSON.stringify(prefsNotif()));
   const ab = await abonnementActuel().catch(() => null);
   if (ab) relais("/push/abonner", { abonnement: ab.toJSON(), qui: cfg.qui || "", prefs: prefsNotif() })
@@ -572,7 +579,10 @@ async function commande(action, libelle, detail = "", zone = "banner") {
     try {
       let j;
       if (action === "status") j = await relais(`/etat?journal=1&qui=${encodeURIComponent(cfg.qui || "")}`);
-      else if (action === "regler") j = await relais("/commande", { action, qui: cfg.qui || "", ...JSON.parse(detail) });
+      else if (action === "regler") {
+        const ab = await abonnementActuel().catch(() => null);
+        j = await relais("/commande", { action, qui: cfg.qui || "", endpoint: ab ? ab.endpoint : undefined, ...JSON.parse(detail) });
+      }
       else {
         const ab = await abonnementActuel().catch(() => null);
         j = await relais("/commande", { action, qui: cfg.qui || "", endpoint: ab ? ab.endpoint : undefined });
@@ -707,6 +717,7 @@ async function enregistrerReglages() {
       changes.push(`${LIB[k][0]} ${fmt(initial[k])} → ${fmt(v)}${LIB[k][1]}`);
     }
     initial = c; verifierModif(); toast("✓ Réglages enregistrés");
+    if (changes.length) annoncer(`Mode automatique : ${changes.join(" · ")}`);
     if (changes.length) lancer("reglages", changes.join(" · ")).then(() => setTimeout(chargerHisto, 40000)).catch(() => {});
   } catch (err) { toast(err.message); }
   verifierModif();
@@ -735,6 +746,7 @@ $("auto").addEventListener("change", async () => {
     await ecrireVariable("AUTO", on ? "on" : "off");
     afficherAuto(on);
     toast(on ? "Mode automatique activé" : "Mode automatique désactivé");
+    annoncer(on ? "Mode automatique activé" : "Mode automatique désactivé");
     lancer("reglages", on ? "Mode automatique activé" : "Mode automatique désactivé").then(() => setTimeout(chargerHisto, 40000)).catch(() => {});
   } catch (err) { afficherAuto(!on); toast(err.message); }
 });
