@@ -591,7 +591,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 23h20</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 19/11 · 23h40</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -1172,7 +1172,7 @@ document.addEventListener("visibilitychange", () => {
 function montrerVue(v) {
   const g = v !== "poele";
   vue = g ? "granules" : "poele"; store.set("poele.vue", g ? v : "poele");
-  if (v === "granules") return montrerVue(["tableau", "historique", "stats", "entretiens"].includes(store.get("g.derniere")) ? store.get("g.derniere") : "tableau");
+  if (v === "granules") return montrerVue("tableau");   // le bouton Granulés ouvre toujours le tableau de bord
   if (g) store.set("g.derniere", v);
   document.querySelectorAll("[data-nav]").forEach(b => b.classList.toggle("sel", b.dataset.nav === v));
   $("nav").classList.toggle("ouvert", g);
