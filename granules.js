@@ -5,6 +5,7 @@
    Utilise les fonctions de l'appli : $, gh, relais, toast, esc, cfg, store.
    ============================================================ */
 (() => {
+const C_HEURES = "#d9a441";
 const C_SALON = "#e0631a", C_CUISINE = "#4a98e0", C_EUROS = "#8f7fd6", C_PASSE = "#5d6178", C_TEMP = "#2bb3a3";
 const COULEUR = { salon: C_SALON, cuisine: C_CUISINE };
 const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
@@ -121,6 +122,32 @@ function rendementSalon() {
     pm.min += m; pm.sacs += brul[i].sacs; min += m; sacs += brul[i].sacs;
   }
   return { parSac: sacs ? min / 60 / sacs : null, parMarque, depuis: debutJournal };
+}
+
+/* ---------- Temps de chauffe (poêle salon, journal chauffes.json) ---------- */
+function minutesChauffe(debut, fin) {      // minutes de chauffe dont le début tombe entre deux dates (incluses)
+  if (!chauffes) return null;
+  let m = 0;
+  for (const c of chauffes.liste || []) { const j = iso(new Date(c.debut)); if (j >= debut && j <= fin) m += c.minutes || 0; }
+  const e = chauffes.enCours;
+  if (e) { const j = iso(new Date(e.debut)); if (j >= debut && j <= fin) m += Math.max(0, Math.round((Date.now() - Date.parse(e.debut)) / 60000)); }
+  return m;
+}
+const debutJournal = () => {
+  if (!chauffes) return null;
+  const l = (chauffes.liste || []).map(c => c.debut).concat(chauffes.enCours ? [chauffes.enCours.debut] : []);
+  return l.length ? iso(new Date(l.sort()[0])) : null;
+};
+const duree = m => m === null || m === undefined ? "--" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${pad(m % 60)}`;
+const avecChauffe = () => etat.poele !== "cuisine" && !!debutJournal();
+/** Petit graphique « heures de chauffe » aligné sous un graphique de sacs (même découpage) */
+function panneauHeures(periodes, { cle, etiquettes = true } = {}) {
+  const dj = debutJournal();
+  const cols = periodes.map(([deb, fin, lab, fort]) => {
+    const m = fin < dj ? null : minutesChauffe(deb, fin);
+    return { lab, fort, valeurs: { h: m ? Math.round(m / 6) / 10 : 0 }, info: m === null ? "" : `${duree(m)} de chauffe` };
+  });
+  return `<div class="gtit gpetit" style="margin-top:8px">⏱️ Heures de chauffe · Salon</div>${barres(cols, { cle, cles: ["h"], couleurs: { h: C_HEURES }, hauteur: 74, etiquettes, unite: "h" })}`;
 }
 
 /* ---------- Météo (Open-Meteo) ---------- */
@@ -265,6 +292,11 @@ function vueTableau() {
       <button class="gtuile orange" data-gdetail="brules">${ic("🔥", "orange")}<span class="gtit">Brûlés${etat.poele !== "tous" ? ` · ${esc(courtPoele(etat.poele))}` : ""}</span><div><b>${nb(somme(brul))}</b> <small>sacs</small></div></button>
       <button class="gtuile cyan" data-gdetail="depenses">${ic("💶", "cyan")}<span class="gtit">Dépenses totales</span><div><b>${euros(somme(achats, prixAchat))}</b></div></button>
       <button class="gtuile ambre" data-gdetail="moyenne">${ic("📈", "ambre")}<span class="gtit">Moyenne ${libMoy}</span><div><b>${nb(moy.kg)}</b> <small>kg/j</small></div></button>`;
+  if (avecChauffe()) {
+    const m7 = minutesChauffe(ajouterJours(aujourdhui(), -6), aujourdhui()), mj = minutesChauffe(aujourdhui(), aujourdhui());
+    h += `<button class="gtuile ambre large" data-gdetail="chauffe">${ic("🔥", "ambre")}<span class="gtit">Temps de chauffe · Salon</span>
+      <div class="gligne2"><div><b>${duree(mj)}</b> <small>aujourd'hui</small></div><div class="adroite"><b style="font-size:19px">${duree(m7)}</b> <small>sur 7 jours</small></div></div></button>`;
+  }
   if (etat.poele !== "cuisine") {
     const r = rendementSalon();
     h += `<button class="gtuile vert large" data-gdetail="rendement">${ic("⏱️", "vert")}<span class="gtit">Chauffe par sac · Salon</span>${r.parSac
@@ -276,43 +308,52 @@ function vueTableau() {
   // Graphique
   const choix = [["7j", "7 derniers jours"], ["4s", "4 dernières semaines"], ["mois", "Mois en cours"], ["30j", "30 derniers jours"], ["saison", "Cette saison"]];
   const auj = aujourdhui(), brAll = D.brulages.filter(e => dePoele(e));
-  let cols = [];
+  let cols = [], periodes = [];
   if (etat.graphe === "7j" || etat.graphe === "30j") {
     const n = etat.graphe === "7j" ? 7 : 30;
     for (let i = n - 1; i >= 0; i--) {
       const j = ajouterJours(auj, -i), d = date(j), l = brAll.filter(b => b.date === j);
       cols.push({ lab: n === 7 ? JOURS[d.getDay()] : (i % 7 === 0 ? dateCourte(j) : ""), valeurs: valeursPoeles(l), fort: i === 0,
         info: infoJour(j, l) });
+      periodes.push([j, j, cols[cols.length - 1].lab, i === 0]);
     }
   } else if (etat.graphe === "4s") {
     for (let s = 3; s >= 0; s--) {
       const fin = ajouterJours(auj, -7 * s), debut = ajouterJours(fin, -6);
       const l = brAll.filter(b => b.date >= debut && b.date <= fin);
+      const mc = avecChauffe() && fin >= debutJournal() ? minutesChauffe(debut, fin) : null;
       cols.push({ lab: `${dateCourte(debut)}–${dateCourte(fin)}`, valeurs: valeursPoeles(l), fort: s === 0,
-        info: `<b>Du ${dateCourte(debut)} au ${dateCourte(fin)}</b> : ${sacsTxt(somme(l))}${tempMoyenne(debut, fin) !== null ? ` · ${temp(tempMoyenne(debut, fin))} en moyenne` : ""}` });
+        info: `<b>Du ${dateCourte(debut)} au ${dateCourte(fin)}</b> : ${sacsTxt(somme(l))}${tempMoyenne(debut, fin) !== null ? ` · ${temp(tempMoyenne(debut, fin))} en moyenne` : ""}${mc !== null ? ` · ⏱️ ${duree(mc)} de chauffe` : ""}` });
+      periodes.push([debut, fin, cols[cols.length - 1].lab, s === 0]);
     }
   } else if (etat.graphe === "mois") {
     const premier = auj.slice(0, 8) + "01", n = new Date(date(auj).getFullYear(), date(auj).getMonth() + 1, 0).getDate();
     for (let i = 0; i < n; i++) {
       const j = ajouterJours(premier, i), l = brAll.filter(b => b.date === j);
       cols.push({ lab: [1, 5, 10, 15, 20, 25, 30].includes(i + 1) ? String(i + 1) : "", valeurs: valeursPoeles(l), fort: j === auj, info: infoJour(j, l) });
+      periodes.push([j, j, cols[cols.length - 1].lab, j === auj]);
     }
   } else {
     cols = moisSaison(saisonCourante()).map(({ a, m }) => {
       const l = brAll.filter(b => b.date.startsWith(`${a}-${pad(m)}`));
+      const deb = `${a}-${pad(m)}-01`, fin = `${a}-${pad(m)}-${pad(new Date(a, m, 0).getDate())}`;
+      periodes.push([deb, fin, MOIS_COURT[m - 1], false]);
+      const mc = avecChauffe() && fin >= debutJournal() ? minutesChauffe(deb, fin) : null;
       return { lab: MOIS_COURT[m - 1], valeurs: valeursPoeles(l),
-        info: `<b>${MOIS_LONG[m - 1]} ${a}</b> : ${sacsTxt(somme(l))}${tempMois(a, m) !== null ? ` · ${temp(tempMois(a, m))} en moyenne` : ""}` };
+        info: `<b>${MOIS_LONG[m - 1]} ${a}</b> : ${sacsTxt(somme(l))}${tempMois(a, m) !== null ? ` · ${temp(tempMois(a, m))} en moyenne` : ""}${mc !== null ? ` · ⏱️ ${duree(mc)} de chauffe` : ""}` };
     });
   }
   const totalGraphe = cols.reduce((x, c) => x + Object.values(c.valeurs).reduce((a, b) => a + b, 0), 0);
   h += `<section class="gcarte orangee"><div class="gligne2">${ic("🔥", "orange")}<select class="gselect" id="gGraphe">${choix.map(([id, l]) => `<option value="${id}" ${etat.graphe === id ? "selected" : ""}>${l}</option>`).join("")}</select>
       <span class="gbadge orange">${sacsTxt(totalGraphe)}</span></div>
-      ${barres(cols, { cle: "tab", cles: clesPoeles(), etiquettes: !["30j", "mois"].includes(etat.graphe) })}${legende(legendePoeles())}</section>`;
+      ${barres(cols, { cle: "tab", cles: clesPoeles(), etiquettes: !["30j", "mois"].includes(etat.graphe) })}${legende(legendePoeles())}
+      ${avecChauffe() ? panneauHeures(periodes, { cle: "tabh", etiquettes: !["30j", "mois"].includes(etat.graphe) }) : ""}</section>`;
   return h;
 }
 function infoJour(j, l) {
   const t = meteo && meteo.jours[j];
-  return `<b>${JOURS[date(j).getDay()].replace(".", "")} ${dateLongue(j)}</b> : ${sacsTxt(somme(l))}${l.length ? ` (${l.map(b => `${courtPoele(b.poele)} ${nb(b.sacs)}`).join(", ")})` : ""}${t !== undefined && t !== null ? ` · ${temp(t)}` : ""}`;
+  const m = avecChauffe() && j >= debutJournal() ? minutesChauffe(j, j) : null;
+  return `<b>${JOURS[date(j).getDay()].replace(".", "")} ${dateLongue(j)}</b> : ${sacsTxt(somme(l))}${l.length ? ` (${l.map(b => `${courtPoele(b.poele)} ${nb(b.sacs)}`).join(", ")})` : ""}${t !== undefined && t !== null ? ` · ${temp(t)}` : ""}${m !== null ? ` · ⏱️ ${duree(m)} de chauffe` : ""}`;
 }
 
 /* ---------- Détails des tuiles ---------- */
@@ -364,6 +405,16 @@ function detail(type) {
       <div class="gbloc"><div class="gtit">Froid de la saison (degrés-jours)</div>${ligne(`Saison ${nomSaison(sc)}`, `<b>${djuC !== null ? Math.round(djuC) : "--"} DJU</b>`)}${ligne(`Même période l'an dernier`, `${djuP !== null ? Math.round(djuP) : "--"} DJU`)}
       ${djuC && djuP ? `<div class="gformule">${djuC > djuP ? `Plus froid que l'an dernier (+${Math.round((djuC / djuP - 1) * 100)} %)` : `Plus doux que l'an dernier (${Math.round((djuC / djuP - 1) * 100)} %)`}</div>` : ""}</div>
       <p class="sub gpetit">Degrés-jours : chaque jour compte 18 °C moins la température moyenne du jour. Plus le total est élevé, plus il a fait froid. Données Open-Meteo.</p>`;
+  } else if (type === "chauffe") {
+    const auj = aujourdhui(), dj = debutJournal();
+    const per = [["Aujourd'hui", auj, auj], ["Hier", ajouterJours(auj, -1), ajouterJours(auj, -1)], ["7 derniers jours", ajouterJours(auj, -6), auj],
+      ["Mois en cours", auj.slice(0, 8) + "01", auj], ["Saison", debutSaison(saisonCourante()), auj]];
+    const jours7 = Math.min(7, ecartJours(dj, auj) + 1);
+    ico = "🔥"; titre = "Temps de chauffe · Salon"; teinte = "ambre";
+    corps = `<div class="gbloc">${per.map(([l, a, b]) => ligne(l, b < dj ? "--" : `<b>${duree(minutesChauffe(a, b))}</b>`)).join("")}</div>
+      <div class="gbloc">${ligne("Moyenne par jour (7 j)", duree(Math.round(minutesChauffe(ajouterJours(auj, -6), auj) / Math.max(1, jours7))))}
+      ${ligne("Nombre de chauffes (7 j)", String((chauffes.liste || []).filter(c => iso(new Date(c.debut)) >= ajouterJours(auj, -6)).length + (chauffes.enCours ? 1 : 0)))}</div>
+      <p class="sub gpetit">Mesuré par le relais à chaque allumage et extinction du poêle salon, depuis le ${dateLongue(dj)}. Le détail de chaque chauffe est dans l'onglet Poêle, historique « Temps de chauffe ».</p>`;
   } else if (type === "rendement") {
     const r = rendementSalon();
     ico = "⏱️"; titre = "Chauffe par sac · Salon"; teinte = "vert";
@@ -397,7 +448,7 @@ function vueHistorique() {
     const ouvert = etat.ouverts.has(k) || (premier && !etat.ouverts.has("!" + k));
     const ach = somme(l.filter(x => x.l === "achats").map(x => x.e)), br = somme(l.filter(x => x.l === "brulages").map(x => x.e));
     h += `<details class="gcarte gmois" data-gmois="${k}" ${ouvert ? "open" : ""}><summary><div><b>${MOIS_LONG[m - 1]} ${a}</b>
-      <div class="gpetit"><span class="tbleu">🛒 ${nb(ach)} achetés</span>, <span class="torange">🔥 ${nb(br)} brûlés</span></div></div></summary><div class="glist">`;
+      <div class="gpetit"><span class="tbleu">🛒 ${nb(ach)} achetés</span>, <span class="torange">🔥 ${nb(br)} brûlés</span>${avecChauffe() && `${k}-31` >= debutJournal() ? `, <span style="color:${C_HEURES}">⏱️ ${duree(minutesChauffe(`${k}-01`, `${k}-31`))}</span>` : ""}</div></div></summary><div class="glist">`;
     for (const { l: liste, e } of l) h += ligneHisto(liste, e);
     h += `</div></details>`;
     premier = false;
@@ -450,7 +501,7 @@ function vueStats() {
     const t = tempMois(a, m), tp = tempMois(a - 1, m);
     return sacs
       ? { lab: MOIS_COURT[m - 1], valeurs: valeursPoeles(l), fantome: somme(lp),
-          info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${sacsTxt(somme(l))}${t !== null ? ` (${temp(t)})` : ""}<br>${nomSaison(prec)} : ${sacsTxt(somme(lp))}${tp !== null ? ` (${temp(tp)})` : ""}` }
+          info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${sacsTxt(somme(l))}${t !== null ? ` (${temp(t)})` : ""}${avecChauffe() && `${k}-31` >= debutJournal() ? ` · ⏱️ ${duree(minutesChauffe(`${k}-01`, `${k}-31`))} de chauffe` : ""}<br>${nomSaison(prec)} : ${sacsTxt(somme(lp))}${tp !== null ? ` (${temp(tp)})` : ""}` }
       : { lab: MOIS_COURT[m - 1], valeurs: { e: Math.round(somme(ac, prixAchat)) }, fantome: Math.round(somme(acp, prixAchat)),
           info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${euros(somme(ac, prixAchat))}<br>${nomSaison(prec)} : ${euros(somme(acp, prixAchat))}` };
   });
@@ -461,6 +512,7 @@ function vueStats() {
     <div class="gtit gpetit" style="margin-top:6px">🌡️ Température moyenne à ${esc(ville().nom)}</div>
     ${courbes([{ pts: mois.map(({ a, m }) => tempMois(a - 1, m)), couleur: "#8a8fa8", tirets: true }, { pts: mois.map(({ a, m }) => tempMois(a, m)), couleur: C_TEMP }], mois.length, { cle: "mois" })}
     ${legende([pastille("#8a8fa8", nomSaison(prec), true), pastille(C_TEMP, nomSaison(sel))])}
+    ${avecChauffe() ? panneauHeures(mois.map(({ a, m }) => [`${a}-${pad(m)}-01`, `${a}-${pad(m)}-${pad(new Date(a, m, 0).getDate())}`, MOIS_COURT[m - 1], false]), { cle: "moish" }) : ""}
     <div class="sub gpetit gcentre">Touche un mois pour comparer.</div></section>`;
 
   // 2. Saisons
@@ -480,7 +532,8 @@ function vueStats() {
     const fin = a === sc ? auj : finSaison(a), deb = debutSaison(a);
     const t = tempMoyenne(deb, fin), dj = dju(deb, fin);
     const s = somme(D.brulages.filter(b => anneeSaison(b.date) === a && dePoele(b)));
-    return { a, t, dj, s, partiel: a === sc };
+    const mc = avecChauffe() && fin >= debutJournal() ? minutesChauffe(deb, fin) : null;
+    return { a, t, dj, s, mc, partiel: a === sc };
   });
   const tMoy = lignesHiver.filter(x => x.t !== null && !x.partiel).map(x => x.t);
   const ref = tMoy.length ? tMoy.reduce((x, y) => x + y, 0) / tMoy.length : null;
@@ -489,7 +542,7 @@ function vueStats() {
     ${meteo ? `<div class="ghivers">${lignesHiver.map(x => `<div class="ghiver${x.a === sel ? " sel" : ""}"><span>${nomSaison(x.a)}${x.partiel ? "*" : ""}</span>
       <span class="gtherm"><i style="width:${x.t === null ? 0 : Math.max(4, Math.min(100, (x.t + 2) / 16 * 100))}%"></i></span>
       <span><b>${temp(x.t)}</b> <small>${qualif(x.t)}</small></span>
-      <span class="gpetit">${x.dj !== null ? Math.round(x.dj) + " DJU" : ""}${x.s && x.dj ? ` · ${nb(x.s / x.dj * 100)} sacs/100 DJU` : ""}</span></div>`).join("")}</div>
+      <span class="gpetit">${x.dj !== null ? Math.round(x.dj) + " DJU" : ""}${x.s && x.dj ? ` · ${nb(x.s / x.dj * 100)} sacs/100 DJU` : ""}${x.mc ? ` · ⏱️ ${Math.round(x.mc / 60)} h de chauffe salon${x.dj ? ` (${nb(x.mc / 60 / x.dj * 100)} h/100 DJU)` : ""}` : ""}</span></div>`).join("")}</div>
       <p class="sub gpetit">* saison en cours, jusqu'à aujourd'hui. DJU (degrés-jours) : mesure du froid ; « sacs/100 DJU » compare la consommation à froid égal.</p>`
     : `<div class="sub">Météo indisponible pour l'instant.</div>`}</section>`;
 
@@ -502,6 +555,7 @@ function vueStats() {
   }));
   const maxCase = Math.max(1, ...cases.flat().map(c => c.sacs));
   infos.cases = cases.map(col => col.map(c => `<b>Du ${c.d1} au ${c.fin} ${MOIS_LONG[c.m - 1].toLowerCase()} ${c.a}</b> : ${sacsTxt(c.sacs)} · ${nb(c.sacs * R().kgSac, 0)} kg${tempMoyenne(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`) !== null ? ` · ${temp(tempMoyenne(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`))}` : ""}`
+    + (avecChauffe() && `${c.a}-${pad(c.m)}-${pad(c.fin)}` >= debutJournal() ? ` · ⏱️ ${duree(minutesChauffe(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`))} de chauffe` : "")
     + (c.l.length ? "<br>" + c.l.map(b => `${dateCourte(b.date)} · ${esc(courtPoele(b.poele))} · ${esc(b.marque)} : ${nb(b.sacs)}`).join("<br>") : "")));
   h += `<section class="gcarte"><div class="gtete">${ic("📊", "orange")}<div><b>Intensité de consommation</b><div class="gpetit">Suivi hebdomadaire de la saison</div></div>
     <div class="gechelle">Moins${[0, .25, .5, .75, 1].map(x => `<i style="background:${x ? `rgba(224,99,26,${(.25 + .75 * x).toFixed(2)})` : "var(--gcase)"}"></i>`).join("")}Plus</div></div>
