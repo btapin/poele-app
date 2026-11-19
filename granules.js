@@ -25,7 +25,7 @@ const etat = {
   poele: store.get("g.poele") || "tous",
   portee: store.get("g.portee") || "saison",
   graphe: store.get("g.graphe") || "7j", moyenne: "7j", filtreHisto: "tous", saisonStats: null, ouverts: new Set(),
-  entPoele: store.get("g.entPoele") || "salon", statSaison: "brules", statMois: "sacs",
+  entPoele: store.get("g.entPoele") || "salon", meteoGraphe: store.get("g.meteoGraphe") !== "non", statSaison: "brules", statMois: "sacs",
 };
 
 /* ---------- Outils ---------- */
@@ -195,8 +195,10 @@ function ressenti(t) {
 }
 
 /* ---------- Graphiques (SVG faits main, sans double axe) ---------- */
-function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, etiquettes = true, unite = "" } = {}) {
-  const W = 320, H = hauteur, bas = 18, haut = 14;
+function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, etiquettes = true, unite = "", temperatures = null } = {}) {
+  const valsT = temperatures ? temperatures.flatMap(s => s.pts).filter(v => v !== null && v !== undefined) : [];
+  const avecT = valsT.length > 0;
+  const W = avecT ? 290 : 320, H = hauteur, bas = 18, haut = 14;
   const k = cles || Object.keys(couleurs);
   const tot = c => k.reduce((x, kk) => x + (c.valeurs[kk] || 0), 0);
   const avecFantome = cols.some(c => c.fantome !== undefined);
@@ -205,7 +207,7 @@ function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, eti
   const larg = avecFantome ? Math.min(15, pas * .34) : Math.min(26, pas * .62);
   const y0 = H - bas, echelle = v => (v / max) * (H - bas - haut);
   if (cle) infos[cle] = cols.map(c => c.info || "");
-  let svg = `<svg viewBox="0 0 ${W} ${H}" class="gsvg">`;
+  let svg = `<svg viewBox="0 0 ${avecT ? 320 : W} ${H}" class="gsvg">`;
   for (let i = 1; i <= 3; i++) svg += `<line x1="0" x2="${W}" y1="${y0 - (H - bas - haut) * i / 3}" y2="${y0 - (H - bas - haut) * i / 3}" class="ggrille"/>`;
   svg += `<line x1="0" x2="${W}" y1="${y0 + .5}" y2="${y0 + .5}" class="gaxe"/>`;
   cols.forEach((c, i) => {
@@ -224,8 +226,20 @@ function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, eti
     });
     if (t && etiquettes) svg += `<text x="${x + larg / 2}" y="${y - 4}" class="gval">${nb(t)}${unite}</text>`;
     svg += `<text x="${centre}" y="${H - 4}" class="glab${c.fort ? " fort" : ""}">${esc(c.lab)}</text>`;
-    if (cle) svg += `<rect x="${i * pas}" y="0" width="${pas}" height="${H}" fill="transparent" data-gtap="${cle}:${i}" class="gzone"/>`;
   });
+  if (avecT) {      // courbe de température superposée, avec sa propre échelle en °C à droite
+    let tmin = Math.floor(Math.min(...valsT) / 5) * 5 - 5, tmax = Math.ceil(Math.max(...valsT) / 5) * 5 + 5;
+    const yt = v => haut + (1 - (v - tmin) / (tmax - tmin)) * (y0 - haut);
+    svg += `<line x1="${W + 4}" x2="${W + 4}" y1="${haut}" y2="${y0}" class="gaxe"/>`;
+    for (let v = tmin; v <= tmax; v += 10) svg += `<line x1="${W + 4}" x2="${W + 8}" y1="${yt(v)}" y2="${yt(v)}" class="gaxe"/><text x="${W + 10}" y="${yt(v) + 3}" class="glab gauche ttemp">${v}°</text>`;
+    for (const s of temperatures) {
+      let d = "", seg = false;
+      s.pts.forEach((v, i) => { if (v === null || v === undefined) { seg = false; return; } d += `${seg ? "L" : "M"}${i * pas + pas / 2},${yt(v)} `; seg = true; });
+      svg += `<path d="${d}" fill="none" stroke="${s.couleur}" stroke-width="${s.tirets ? 2 : 2.5}" stroke-linecap="round" ${s.tirets ? 'stroke-dasharray="4 4" opacity=".8"' : ""}/>`;
+      if (!s.tirets) s.pts.forEach((v, i) => { if (v !== null && v !== undefined) svg += `<circle cx="${i * pas + pas / 2}" cy="${yt(v)}" r="4" fill="${s.couleur}" stroke="#181c2c" stroke-width="2"/>`; });
+    }
+  }
+  if (cle) cols.forEach((c, i) => { svg += `<rect x="${i * pas}" y="0" width="${pas}" height="${H}" fill="transparent" data-gtap="${cle}:${i}" class="gzone"/>`; });
   return svg + `</svg>${cle ? `<div class="ginfo" id="info-${cle}"></div>` : ""}`;
 }
 /** Petit graphique de température aligné sous des barres (même axe horizontal, échelle propre) */
@@ -507,11 +521,11 @@ function vueStats() {
   });
   h += `<section class="gcarte">
     <div class="gseg">${[["sacs", "🔥 Sacs brûlés"], ["euros", "€ Dépenses"]].map(([id, l]) => `<button data-gstatmois="${id}" class="${etat.statMois === id ? "sel" + (id === "euros" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
-    ${legende([pastille(C_PASSE, nomSaison(prec)), ...(sacs ? (cles.length > 1 ? cles.map(k => pastille(COULEUR[k], `${nomSaison(sel)} · ${courtPoele(k)}`)) : [pastille(COULEUR[cles[0]], nomSaison(sel))]) : [pastille(C_EUROS, nomSaison(sel))])])}
-    ${barres(cols, { cle: "mois", cles: sacs ? cles : ["e"], couleurs: sacs ? COULEUR : { e: C_EUROS }, unite: sacs ? "" : "€" })}
-    <div class="gtit gpetit" style="margin-top:6px">🌡️ Température moyenne à ${esc(ville().nom)}</div>
-    ${courbes([{ pts: mois.map(({ a, m }) => tempMois(a - 1, m)), couleur: "#8a8fa8", tirets: true }, { pts: mois.map(({ a, m }) => tempMois(a, m)), couleur: C_TEMP }], mois.length, { cle: "mois" })}
-    ${legende([pastille("#8a8fa8", nomSaison(prec), true), pastille(C_TEMP, nomSaison(sel))])}
+    ${legende([pastille(C_PASSE, nomSaison(prec)), ...(sacs ? (cles.length > 1 ? cles.map(k => pastille(COULEUR[k], `${nomSaison(sel)} · ${courtPoele(k)}`)) : [pastille(COULEUR[cles[0]], nomSaison(sel))]) : [pastille(C_EUROS, nomSaison(sel))]),
+      `<button class="gmeteo${etat.meteoGraphe ? " sel" : ""}" data-gmeteo="1">🌡️ Météo ${etat.meteoGraphe ? "✓" : ""}</button>`])}
+    ${barres(cols, { cle: "mois", cles: sacs ? cles : ["e"], couleurs: sacs ? COULEUR : { e: C_EUROS }, unite: sacs ? "" : "€",
+      temperatures: etat.meteoGraphe && meteo ? [{ pts: mois.map(({ a, m }) => tempMois(a - 1, m)), couleur: "#7f9cc9", tirets: true }, { pts: mois.map(({ a, m }) => tempMois(a, m)), couleur: C_TEMP }] : null })}
+    ${etat.meteoGraphe && meteo ? legende([pastille("#7f9cc9", `°C ${nomSaison(prec)}`, true), pastille(C_TEMP, `°C ${nomSaison(sel)} (échelle à droite)`)]) : ""}
     ${avecChauffe() ? panneauHeures(mois.map(({ a, m }) => [`${a}-${pad(m)}-01`, `${a}-${pad(m)}-${pad(new Date(a, m, 0).getDate())}`, MOIS_COURT[m - 1], false]), { cle: "moish" }) : ""}
     <div class="sub gpetit gcentre">Touche un mois pour comparer.</div></section>`;
 
@@ -554,16 +568,18 @@ function vueStats() {
     return { a, m, d1, fin, sacs: somme(l), l };
   }));
   const maxCase = Math.max(1, ...cases.flat().map(c => c.sacs));
+  const RAMPE = ["#ffd98a", "#ffb04d", "#f57a22", "#d9481a", "#a32616"];
+  const couleurCase = s => RAMPE[Math.min(4, Math.max(0, Math.ceil(s / maxCase * 5) - 1))];
   infos.cases = cases.map(col => col.map(c => `<b>Du ${c.d1} au ${c.fin} ${MOIS_LONG[c.m - 1].toLowerCase()} ${c.a}</b> : ${sacsTxt(c.sacs)} · ${nb(c.sacs * R().kgSac, 0)} kg${tempMoyenne(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`) !== null ? ` · ${temp(tempMoyenne(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`))}` : ""}`
     + (avecChauffe() && `${c.a}-${pad(c.m)}-${pad(c.fin)}` >= debutJournal() ? ` · ⏱️ ${duree(minutesChauffe(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`))} de chauffe` : "")
     + (c.l.length ? "<br>" + c.l.map(b => `${dateCourte(b.date)} · ${esc(courtPoele(b.poele))} · ${esc(b.marque)} : ${nb(b.sacs)}`).join("<br>") : "")));
   h += `<section class="gcarte"><div class="gtete">${ic("📊", "orange")}<div><b>Intensité de consommation</b><div class="gpetit">Suivi hebdomadaire de la saison</div></div>
-    <div class="gechelle">Moins${[0, .25, .5, .75, 1].map(x => `<i style="background:${x ? `rgba(224,99,26,${(.25 + .75 * x).toFixed(2)})` : "var(--gcase)"}"></i>`).join("")}Plus</div></div>
+    <div class="gechelle">Moins<i style="background:var(--gcase)"></i>${RAMPE.map(c => `<i style="background:${c}"></i>`).join("")}Plus</div></div>
     <div class="gheat" style="grid-template-columns:repeat(${mois.length},1fr)">
     ${mois.map(({ a, m }) => `<div class="gh-t">${MOIS_COURT[m - 1]} '${String(a).slice(2)}</div>`).join("")}
     ${tranches.map((_, ti) => cases.map((col, mi) => {
-      const c = col[ti], alpha = c.sacs ? .25 + .75 * c.sacs / maxCase : 0;
-      return `<button class="gh-c${c.sacs ? " plein" : ""}" data-gcase="${mi}-${ti}" style="${c.sacs ? `background:rgba(224,99,26,${alpha.toFixed(2)})` : ""}">${c.d1}-${c.fin}</button>`;
+      const c = col[ti], coul = c.sacs ? couleurCase(c.sacs) : null, clair = coul && RAMPE.indexOf(coul) < 2;
+      return `<button class="gh-c${c.sacs ? " plein" : ""}" data-gcase="${mi}-${ti}" style="${coul ? `background:${coul};color:${clair ? "#3a1a08" : "#fff"}` : ""}">${c.d1}-${c.fin}</button>`;
     }).join("")).join("")}</div><div class="ginfo" id="info-cases"></div></section>`;
 
   // 5. Fin du stock
@@ -828,6 +844,46 @@ function brancherForm(d, liste, e, lire, apres) {
     });
   }
 }
+/* Bouton + : éventail Brûlage (gauche) · Autres (haut) · Entretien (droite) */
+const radial = document.createElement("div");
+radial.className = "gradial";
+radial.innerHTML = `<button class="gr-btn brulage" data-r="brulage"><i>🔥</i>Brûlage</button>
+  <button class="gr-btn autres" data-r="autres"><i>⋯</i>Autres</button>
+  <button class="gr-btn entretien" data-r="entretien"><i>🧹</i>Entretien</button>`;
+document.body.appendChild(radial);
+function basculerRadial(ouvrir) {
+  const fab = $("gPlus");
+  radial.classList.toggle("ouvert", ouvrir);
+  if (fab) fab.classList.toggle("ouvert", ouvrir);
+}
+radial.addEventListener("click", e => {
+  const b = e.target.closest("[data-r]");
+  basculerRadial(false);
+  if (!b) return;
+  if (b.dataset.r === "brulage") feuilleBrulage();
+  else if (b.dataset.r === "entretien") menuEntretien();
+  else menuAutres();
+});
+const optMenu = (id, icone, t, s, teinte) => `<button type="button" class="gmenu" data-g="${id}">${ic(icone, teinte)}<div><b>${t}</b><small>${s}</small></div></button>`;
+function menuEntretien() {
+  ouvrirFeuille(`<div class="gpoignee"></div><div class="gtit" style="margin:0 4px 6px">Entretien</div>
+    ${optMenu("regulier", "🧹", "Entretien régulier", "Brasier, cendres…", "orange")}
+    ${optMenu("vitre", "✨", "Nettoyage vitre", "Vitre propre", "bleu")}
+    ${optMenu("annuel", "🛠️", "Entretien annuel", "Ramonage, visite du professionnel", "vert")}`, d => {
+    d.querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => feuilleEntretien(null, b.dataset.g)));
+  });
+}
+function menuAutres() {
+  ouvrirFeuille(`<div class="gpoignee"></div><div class="gtit" style="margin:0 4px 6px">Autres</div>
+    ${optMenu("achat", "🛒", "Achat de granulés", "Des sacs ajoutés au stock", "bleu")}
+    ${optMenu("annexe", "🧩", "Dépense annexe", "Brosse, joint, aspirateur…", "violet")}
+    ${optMenu("rdv", "📅", "Rendez-vous d'entretien annuel", "Planifier le ramonage", "vert")}`, d => {
+    d.querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => {
+      const x = b.dataset.g;
+      if (x === "achat") feuilleAchat(); else if (x === "annexe") feuilleEntretien(null, "annexe"); else feuilleRdv(poeleParDefaut());
+    }));
+  });
+}
 function feuilleAjout() {
   const opt = (id, icone, t, s, teinte) => `<button type="button" class="gmenu" data-g="${id}">${ic(icone, teinte)}<div><b>${t}</b><small>${s}</small></div></button>`;
   ouvrirFeuille(`<div class="gpoignee"></div>
@@ -954,9 +1010,10 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gentp) { etat.entPoele = ds.gentp; store.set("g.entPoele", ds.gentp); return rendre(); }
   if (ds.gstatmois) { etat.statMois = ds.gstatmois; return rendre(); }
   if (ds.gstatsaison) { etat.statSaison = ds.gstatsaison; return rendre(); }
+  if (ds.gmeteo) { etat.meteoGraphe = !etat.meteoGraphe; store.set("g.meteoGraphe", etat.meteoGraphe ? "oui" : "non"); return rendre(); }
   if (ds.gmarqueprix) { etat.marquePrix = ds.gmarqueprix; return rendre(); }
   if (ds.gdetail) return detail(ds.gdetail);
-  if (t.id === "gPlus") return feuilleAjout();
+  if (t.id === "gPlus") return basculerRadial(!radial.classList.contains("ouvert"));
   if (t.id === "gReglages") return feuilleReglages();
   if (ds.gcase) {
     const [mi, ti] = ds.gcase.split("-").map(Number);
