@@ -739,7 +739,7 @@ const optMarques = (sel, avecStock) => {
   const st = stockParMarque();
   return marques().map(m => `<option value="${esc(m)}" ${m === sel ? "selected" : ""}>${esc(m)}${avecStock ? ` (${nb(st[m] || 0)} sacs)` : ""}</option>`).join("");
 };
-function poeleParDefaut() { return etat.poele !== "tous" ? etat.poele : store.get("g.dernierPoele") || "salon"; }
+function poeleParDefaut() { return etat.poele !== "tous" ? etat.poele : "salon"; }   // le salon consomme le plus
 // Entretien : le poêle filtré s'il y en a un, sinon le salon (le poêle du dernier brûlage n'a rien à voir)
 function poeleEntretien() { return etat.poele !== "tous" ? etat.poele : "salon"; }
 function marqueParDefaut() {
