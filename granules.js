@@ -25,7 +25,7 @@ const etat = {
   poele: store.get("g.poele") || "tous",
   portee: store.get("g.portee") || "saison",
   graphe: store.get("g.graphe") || "7j", moyenne: "7j", filtreHisto: "tous", saisonStats: null, ouverts: new Set(),
-  entPoele: store.get("g.entPoele") || "salon", meteoGraphe: store.get("g.meteoGraphe") !== "non", statSaison: "brules", statMois: "sacs",
+  entPoele: "salon", meteoGraphe: store.get("g.meteoGraphe") !== "non", statSaison: "brules", statMois: "sacs",
 };
 
 /* ---------- Outils ---------- */
@@ -740,6 +740,8 @@ const optMarques = (sel, avecStock) => {
   return marques().map(m => `<option value="${esc(m)}" ${m === sel ? "selected" : ""}>${esc(m)}${avecStock ? ` (${nb(st[m] || 0)} sacs)` : ""}</option>`).join("");
 };
 function poeleParDefaut() { return etat.poele !== "tous" ? etat.poele : store.get("g.dernierPoele") || "salon"; }
+// Entretien : le poêle filtré s'il y en a un, sinon le salon (le poêle du dernier brûlage n'a rien à voir)
+function poeleEntretien() { return etat.poele !== "tous" ? etat.poele : "salon"; }
 function marqueParDefaut() {
   const st = stockParMarque(), dern = D.brulages[D.brulages.length - 1];
   if (dern && (st[dern.marque] || 0) > 0) return dern.marque;
@@ -789,7 +791,7 @@ function feuilleAchat(e) {
   });
 }
 function feuilleEntretien(e, type, poele) {
-  const modif = !!e; e = e || { date: aujourdhui(), type, poele: poele || poeleParDefaut(), note: "", cout: null, libelle: "" };
+  const modif = !!e; e = e || { date: aujourdhui(), type, poele: poele || poeleEntretien(), note: "", cout: null, libelle: "" };
   const annexe = e.type === "annexe", teinte = { annuel: "vert", regulier: "orange", vitre: "bleu", annexe: "violet" }[e.type];
   ouvrirFeuille(`${tete(ICONE_ENT[e.type], modif ? `Modifier : ${TYPES_ENT[e.type]}` : TYPES_ENT[e.type], teinte)}
     ${champ("Date", `<input type="date" name="date" value="${e.date}" required>`)}
@@ -903,7 +905,7 @@ function menuAutres() {
     ${optMenu("rdv", "📅", "Rendez-vous d'entretien annuel", "Planifier le ramonage", "vert")}`, d => {
     d.querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => {
       const x = b.dataset.g;
-      if (x === "achat") feuilleAchat(); else if (x === "annexe") feuilleEntretien(null, "annexe"); else feuilleRdv(poeleParDefaut());
+      if (x === "achat") feuilleAchat(); else if (x === "annexe") feuilleEntretien(null, "annexe"); else feuilleRdv(poeleEntretien());
     }));
   });
 }
