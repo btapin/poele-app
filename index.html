@@ -87,7 +87,7 @@
   .stepper button { width: 40px; height: 44px; border: 0; background: transparent; color: var(--text);
     font-size: 20px; cursor: pointer; }
   .stepper output { flex: 1; text-align: center; font-weight: 700; font-size: 17px; }
-  input[type=time], input[type=text], input[type=password] { width: 100%; margin-top: 6px; padding: 11px 12px;
+  input[type=time], input[type=text], input[type=password], #tempSeuils input { width: 100%; margin-top: 6px; padding: 11px 12px;
     background: var(--card2); border: 1px solid var(--line); border-radius: 12px; color: var(--text);
     font: inherit; font-weight: 600; font-size: 16px; }
   input[type=time] { color-scheme: dark; }
@@ -160,7 +160,7 @@
   .dhead .icon-btn { width: 36px; height: 36px; font-size: 16px; }
   .bloc { border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 12px; background: var(--card2); }
   .bloc h3 { margin: 0; font-size: 15px; }
-  .bloc input[type=text], .bloc input[type=password] { background: var(--card); }
+  .bloc input[type=text], .bloc input[type=password], #tempSeuils input { background: var(--card); }
   .bloc .save { background: var(--card); }
   .bloc .save.dirty { background: var(--text); }
   details.bloc summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
@@ -566,12 +566,17 @@
       <label>🔥 Allumage et extinction <span class="switch"><input type="checkbox" id="nMarche" checked><span class="slider"></span></span></label>
       <label>⚠️ Alarmes et poêle injoignable <span class="switch"><input type="checkbox" id="nAlarmes" checked><span class="slider"></span></span></label>
       <label>⚙️ Changements de réglages <span class="switch"><input type="checkbox" id="nReglages" checked><span class="slider"></span></span></label>
+      <label>🌡️ Alerte température <span class="switch"><input type="checkbox" id="nTemp"><span class="slider"></span></span></label>
+    </div>
+    <div class="two" id="tempSeuils" hidden>
+      <label class="f">🥶 Si moins de (°C)<input type="number" id="nTempBas" inputmode="decimal" step="0.5" min="5" max="35" value="17"></label>
+      <label class="f">🥵 Si plus de (°C)<input type="number" id="nTempHaut" inputmode="decimal" step="0.5" min="5" max="35" value="23"></label>
     </div>
     <div class="two">
       <button class="save dirty" id="btnNotif" type="button">Activer sur ce téléphone</button>
       <button class="save" id="btnNotifTest" type="button">Envoyer un test</button>
     </div>
-    <p class="hint">Surveillance toutes les 5 minutes. Chaque téléphone s'active séparément. iPhone : appli sur l'écran d'accueil et iOS 16.4 minimum.</p>
+    <p class="hint">Surveillance toutes les 5 minutes. Alerte température : une notification quand le salon passe sous le seuil bas ou au-dessus du seuil haut, puis plus rien tant que la température n'est pas revenue (à 0,5 °C près). Chaque téléphone s'active séparément. iPhone : appli sur l'écran d'accueil et iOS 16.4 minimum.</p>
   </div>
 
   <details class="bloc" id="avance">
@@ -591,7 +596,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 20/11 · 19h20</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 20/11 · 19h45</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -761,7 +766,11 @@ async function lireDirect() {
 /* ---------- Notifications ---------- */
 const urlB64 = s => { const b = s.replace(/-/g, "+").replace(/_/g, "/"); return Uint8Array.from(atob(b + "=".repeat((4 - b.length % 4) % 4)), c => c.charCodeAt(0)); };
 const pushPossible = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-function prefsNotif() { return { marche: $("nMarche").checked, alarmes: $("nAlarmes").checked, reglages: $("nReglages").checked }; }
+function prefsNotif() {
+  const t = $("nTemp").checked, v = id => { const n = parseFloat(String($(id).value).replace(",", ".")); return Number.isFinite(n) ? n : null; };
+  return { marche: $("nMarche").checked, alarmes: $("nAlarmes").checked, reglages: $("nReglages").checked,
+    tempBasse: t ? v("nTempBas") : null, tempHaute: t ? v("nTempHaut") : null };
+}
 /** Prévient les autres téléphones d'un changement de réglage (sans bloquer l'appli si le relais ne répond pas) */
 async function annoncer(texte) {
   if (!cfg.relais || !texte) return;
@@ -780,7 +789,10 @@ async function majNotif() {
     $("notifTxt").textContent = "Nécessite le relais Cloudflare (voir Paramètres avancés)";
     $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
   }
-  try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; $("nReglages").checked = p.reglages !== false; } catch {}
+  try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; $("nReglages").checked = p.reglages !== false;
+    $("nTemp").checked = p.tempBasse != null || p.tempHaute != null;
+    if (p.tempBasse != null) $("nTempBas").value = p.tempBasse; if (p.tempHaute != null) $("nTempHaut").value = p.tempHaute;
+    $("tempSeuils").hidden = !$("nTemp").checked; } catch {}
   if (!pushPossible()) {
     $("notifTxt").textContent = "Non disponible ici. Sur iPhone, ajoute d'abord l'appli à l'écran d'accueil (iOS 16.4 ou plus).";
     $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
@@ -813,8 +825,11 @@ $("btnNotif").addEventListener("click", async () => {
   } catch (err) { toast(err.message); }
   majNotif();
 });
-["nMarche", "nAlarmes", "nReglages"].forEach(id => $(id).addEventListener("change", async () => {
-  store.set("poele.notifprefs", JSON.stringify(prefsNotif()));
+$("nTemp").addEventListener("change", () => { $("tempSeuils").hidden = !$("nTemp").checked; });
+["nMarche", "nAlarmes", "nReglages", "nTemp", "nTempBas", "nTempHaut"].forEach(id => $(id).addEventListener("change", async () => {
+  const p = prefsNotif();
+  if ($("nTemp").checked && (p.tempBasse === null || p.tempHaute === null || p.tempBasse >= p.tempHaute)) return toast("Le seuil bas doit être inférieur au seuil haut");
+  store.set("poele.notifprefs", JSON.stringify(p));
   const ab = await abonnementActuel().catch(() => null);
   if (ab) relais("/push/abonner", { abonnement: ab.toJSON(), qui: cfg.qui || "", prefs: prefsNotif() })
     .then(() => toast("✓ Préférences enregistrées")).catch(err => toast(err.message));
