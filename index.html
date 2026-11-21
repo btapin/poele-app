@@ -111,6 +111,11 @@
   .onglets { display: flex; gap: 4px; background: var(--card2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; flex: 1; margin-right: 10px; }
   .onglets button { flex: 1; padding: 8px 2px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; white-space: nowrap; font-weight: 600; }
   .onglets button.sel { background: var(--fire); color: #1a120b; }
+  .hfiltres { display: grid; grid-template-columns: repeat(5, auto); gap: 5px; overflow-x: auto; margin: 0 -2px 12px; padding: 0 2px 2px; scrollbar-width: none; }
+  .hfiltres::-webkit-scrollbar, .hfiltres[hidden] { display: none; }
+  .hfiltres button { padding: 7px 4px; border-radius: 999px; border: 1px solid var(--line); background: var(--card2);
+    color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .hfiltres button.sel { background: var(--text); color: var(--bg); border-color: var(--text); }
   .jour { display: flex; justify-content: space-between; color: var(--fire2); font-size: 13px; font-weight: 600; padding: 12px 0 4px; }
   ul.runs .jour:first-child { padding-top: 0; }
   ul.runs li.jour { border-top: 0; }
@@ -544,6 +549,10 @@
         </div>
         <button class="icon-btn petit" id="btnHisto" aria-label="Rafraîchir l'historique">↻</button>
       </div>
+      <div class="hfiltres" id="hFiltres">
+        <button class="sel" data-hf="tous">Tous</button><button data-hf="marche">Marche</button><button data-hf="reglages">Réglages</button>
+        <button data-hf="alertes">Alertes</button><button data-hf="releves">Relevés</button>
+      </div>
       <ul class="runs" id="runs"><li class="rd">Chargement…</li></ul>
       <ul class="runs" id="chauffes" hidden><li class="rd">Chargement…</li></ul>
       <button class="more" id="btnMore" hidden>Voir plus</button>
@@ -596,7 +605,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 20/11 · 19h45</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 21/11 · 20h40</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -1035,6 +1044,16 @@ $("auto").addEventListener("change", async () => {
 });
 
 /* ---------- Historique ---------- */
+// Filtres de l'historique des événements
+const FILTRES_HISTO = {
+  tous: () => true,
+  marche: e => e.type === "allumage" || e.type === "extinction",
+  reglages: e => e.type === "reglages",
+  alertes: e => ["erreur", "injoignable", "reconnexion"].includes(e.type),
+  releves: e => e.type === "releve" || e.type === "rien",
+};
+let filtreHisto = "tous";
+const histoFiltre = () => histo.filter(FILTRES_HISTO[filtreHisto] || FILTRES_HISTO.tous);
 const ICONES = { allumage: "🔥", extinction: "❄️", releve: "🌡️", reglages: "⚙️", rien: "ℹ️", erreur: "⚠️", injoignable: "📡", reconnexion: "📡" };
 let histo = [], histoMax = 8;
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1057,14 +1076,19 @@ async function chargerEvenements() {
   try {
     histo = JSON.parse(await gh(`/contents/historique.json?ref=etat&t=${Date.now()}`, { raw: true }));
   } catch (err) { if (!err.notFound) { $("runs").innerHTML = `<li class="rd err">${esc(err.message)}</li>`; return; } histo = []; }
-  for (const e of histo.slice(0, histoMax)) {
+  for (const e of histoFiltre().slice(0, histoMax)) {
     const sous = [e.mode === "auto" ? "Automatique" : e.mode === "detecte" ? "Détecté par la surveillance" : e.qui ? `par ${e.qui}` : "Manuel"];
     if (e.temperature !== undefined && e.temperature !== null) sous.push(`${fmt(e.temperature)} °C`);
     lignes.push(`<li><span class="ri">${ICONES[e.type] || "•"}</span><span class="rt">${esc(e.texte)}<small>${esc(sous.join(" · "))}</small></span><span class="rd">${quand(e.horodatage)}</span></li>`);
   }
-  $("runs").innerHTML = lignes.join("") || `<li class="rd">Aucun événement pour l'instant</li>`;
-  $("btnMore").hidden = histo.length <= histoMax;
+  $("runs").innerHTML = lignes.join("") || `<li class="rd">${filtreHisto === "tous" ? "Aucun événement pour l'instant" : "Aucun événement de ce type"}</li>`;
+  $("btnMore").hidden = histoFiltre().length <= histoMax;
 }
+document.querySelectorAll("[data-hf]").forEach(b => b.addEventListener("click", () => {
+  filtreHisto = b.dataset.hf; histoMax = 8;
+  document.querySelectorAll("[data-hf]").forEach(x => x.classList.toggle("sel", x === b));
+  chargerEvenements();
+}));
 /* ---------- Temps de chauffe ---------- */
 let onglet = "evts", chauffes = { liste: [], enCours: null }, chauffesMax = 10;
 const ORIGINES = o => o === "auto" ? "Automatique" : o === "detecte" ? "Détecté" : o === "alarme" ? "Alarme" : o || "Manuel";
@@ -1110,7 +1134,8 @@ function montrerOnglet(o) {
   onglet = o;
   document.querySelectorAll(".onglets button").forEach(b => b.classList.toggle("sel", b.dataset.onglet === o));
   $("runs").hidden = o !== "evts"; $("chauffes").hidden = o !== "chauffes";
-  $("btnMore").hidden = o === "evts" ? histo.length <= histoMax : (chauffes.liste || []).length <= chauffesMax;
+  $("hFiltres").hidden = o !== "evts";
+  $("btnMore").hidden = o === "evts" ? histoFiltre().length <= histoMax : (chauffes.liste || []).length <= chauffesMax;
 }
 document.querySelectorAll(".onglets button").forEach(b => b.addEventListener("click", () => montrerOnglet(b.dataset.onglet)));
 async function chargerHisto() { await Promise.all([chargerEvenements(), chargerChauffes()]); montrerOnglet(onglet); }
