@@ -111,6 +111,17 @@
   .onglets { display: flex; gap: 4px; background: var(--card2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; flex: 1; margin-right: 10px; }
   .onglets button { flex: 1; padding: 8px 2px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; white-space: nowrap; font-weight: 600; }
   .onglets button.sel { background: var(--fire); color: #1a120b; }
+  .minuterie { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 14px;
+    background: rgba(255,179,71,.1); border: 1px solid rgba(255,179,71,.35); }
+  .minuterie[hidden] { display: none; }
+  .minuterie > span { font-size: 20px; } .minuterie > div { flex: 1; min-width: 0; }
+  .minuterie b { display: block; font-size: 14.5px; } .minuterie small { color: var(--muted); font-size: 12.5px; }
+  .minchoix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .minchoix button { padding: 12px 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--card2); color: var(--text);
+    font: inherit; font-size: 15px; font-weight: 600; }
+  .minchoix button.sel { background: linear-gradient(135deg, var(--fire2), var(--fire)); color: #1a120b; border-color: transparent; }
+  .minfin { margin-top: 12px; text-align: center; font-weight: 600; color: var(--fire2); min-height: 20px; }
+  #dlgMin input[type=time] { width: 100%; margin-top: 6px; }
   .hfiltres { display: grid; grid-template-columns: repeat(5, auto); gap: 5px; overflow-x: auto; margin: 0 -2px 12px; padding: 0 2px 2px; scrollbar-width: none; }
   .hfiltres::-webkit-scrollbar, .hfiltres[hidden] { display: none; }
   .hfiltres button { padding: 7px 4px; border-radius: 999px; border: 1px solid var(--line); background: var(--card2);
@@ -490,6 +501,10 @@
         <button class="main b-off" id="btnOff">✖ Éteindre</button>
         <button class="main b-refresh" id="btnRefresh">↻ Relever la température maintenant</button>
       </div>
+      <div class="minuterie" id="minuterie" hidden>
+        <span>⏱️</span><div><b id="minTexte"></b><small id="minSous"></small></div>
+        <button class="small-btn" id="minAnnuler">Annuler</button>
+      </div>
       <div class="banner" id="banner"><span class="spinner"></span><span class="bt"></span></div>
     </section>
 
@@ -605,7 +620,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 21/11 · 20h40</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 23/11 · 23h55</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -620,6 +635,20 @@
   </div>
 </nav>
 <dialog id="gSheet"></dialog>
+<dialog id="dlgMin">
+  <form method="dialog" id="formMin">
+    <div class="dhead"><h2 id="minTitre">🔥 Allumer avec minuterie</h2><button class="icon-btn" type="button" data-fermer-min aria-label="Fermer">✕</button></div>
+    <p class="hint" id="minIntro"></p>
+    <div class="minchoix" id="minDurees"></div>
+    <label class="f">Ou éteindre à<input type="time" id="minHeure"></label>
+    <div class="f" style="margin-top:14px">🌡️ Consigne pendant ce temps
+      <div class="stepper" style="margin-top:6px"><button type="button" id="minCMoins">−</button><output id="minConsigne">--</output><button type="button" id="minCPlus">+</button></div>
+    </div>
+    <div class="minfin" id="minFin"></div>
+    <button class="main b-on" type="submit" id="minValider" style="width:100%;margin-top:14px">🔥 Allumer</button>
+    <button class="save" type="button" data-fermer-min>Annuler</button>
+  </form>
+</dialog>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -739,6 +768,7 @@ async function chargerEtat() {
     const txt = await gh(`/contents/etat.json?ref=etat&t=${Date.now()}`, { raw: true });
     const e = JSON.parse(txt);
     afficher(e);
+    chargerMinuterie();
     return e;
   } catch (err) {
     if (err.notFound) $("maj").textContent = "Pas encore de relevé : appuie sur « Relever »";
@@ -877,8 +907,10 @@ async function commande(action, libelle, detail = "", zone = "banner") {
       }
       else {
         const ab = await abonnementActuel().catch(() => null);
-        j = await relais("/commande", { action, qui: cfg.qui || "", endpoint: ab ? ab.endpoint : undefined });
+        j = await relais("/commande", { action, qui: cfg.qui || "", endpoint: ab ? ab.endpoint : undefined, ...(detail ? JSON.parse(detail) : {}) });
       }
+      if (j.minuterie) afficherMinuterie(j.minuterie);
+      else if (action === "off") afficherMinuterie({});
       afficher(j.etat);
       fini(zone === "bannerPoele" ? `✓ Appliqué : ${j.etat.action}` : `✓ ${j.etat.action}`);
     } catch (err) {
@@ -1077,7 +1109,7 @@ async function chargerEvenements() {
     histo = JSON.parse(await gh(`/contents/historique.json?ref=etat&t=${Date.now()}`, { raw: true }));
   } catch (err) { if (!err.notFound) { $("runs").innerHTML = `<li class="rd err">${esc(err.message)}</li>`; return; } histo = []; }
   for (const e of histoFiltre().slice(0, histoMax)) {
-    const sous = [e.mode === "auto" ? "Automatique" : e.mode === "detecte" ? "Détecté par la surveillance" : e.qui ? `par ${e.qui}` : "Manuel"];
+    const sous = [e.mode === "auto" ? "Automatique" : e.mode === "minuterie" ? "Minuterie" : e.mode === "detecte" ? "Détecté par la surveillance" : e.qui ? `par ${e.qui}` : "Manuel"];
     if (e.temperature !== undefined && e.temperature !== null) sous.push(`${fmt(e.temperature)} °C`);
     lignes.push(`<li><span class="ri">${ICONES[e.type] || "•"}</span><span class="rt">${esc(e.texte)}<small>${esc(sous.join(" · "))}</small></span><span class="rd">${quand(e.horodatage)}</span></li>`);
   }
@@ -1091,7 +1123,7 @@ document.querySelectorAll("[data-hf]").forEach(b => b.addEventListener("click", 
 }));
 /* ---------- Temps de chauffe ---------- */
 let onglet = "evts", chauffes = { liste: [], enCours: null }, chauffesMax = 10;
-const ORIGINES = o => o === "auto" ? "Automatique" : o === "detecte" ? "Détecté" : o === "alarme" ? "Alarme" : o || "Manuel";
+const ORIGINES = o => o === "auto" ? "Automatique" : o === "minuterie" ? "Minuterie" : o === "detecte" ? "Détecté" : o === "alarme" ? "Alarme" : o || "Manuel";
 const duree = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
 const heure = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 function nomJour(iso) {
@@ -1185,7 +1217,86 @@ $("btnForgetYes").addEventListener("click", () => {
 });
 
 /* ---------- Démarrage ---------- */
-$("btnOn").addEventListener("click", () => commande("on", "Allumage en cours"));
+/* ---------- Minuterie : allumage en dehors de la plage du mode automatique ---------- */
+let minuterie = {};
+const heureParisNow = () => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+const hhmm = d => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+const dureeLib = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? " " + String(m % 60).padStart(2, "0") : ""}`;
+function horsPlage() {
+  const r = initial.HEURE_DEBUT ? initial : DEFAUTS, h = heureParisNow();
+  return h < r.HEURE_DEBUT || h >= r.HEURE_FIN;
+}
+function afficherMinuterie(m) {
+  minuterie = m || {};
+  const actif = !!(minuterie.fin && minuterie.fin > Date.now());
+  $("minuterie").hidden = !actif;
+  if (!actif) return;
+  const reste = Math.max(1, Math.round((minuterie.fin - Date.now()) / 60000));
+  $("minTexte").textContent = `Extinction programmée à ${hhmm(new Date(minuterie.fin))}`;
+  $("minSous").textContent = `dans ${dureeLib(reste)} · minuterie de ${dureeLib(minuterie.minutes)}${minuterie.qui ? ` lancée par ${minuterie.qui}` : ""}`
+    + (minuterie.consigne ? ` · consigne ${fmt(minuterie.consigne)} °C, puis retour à ${fmt(minuterie.consigneAvant)} °C` : "")
+    + (minuterie.erreurConsigne ? ` · consigne non modifiée (${minuterie.erreurConsigne})` : "");
+}
+async function chargerMinuterie() {
+  if (!cfg.relais) return;
+  try { afficherMinuterie(JSON.parse(await gh(`/contents/minuterie.json?ref=etat&t=${Date.now()}`, { raw: true }))); }
+  catch (e) { if (e.notFound) afficherMinuterie({}); }
+}
+setInterval(() => { if (minuterie.fin) afficherMinuterie(minuterie); }, 30000);
+$("minAnnuler").addEventListener("click", async () => {
+  $("minAnnuler").disabled = true;
+  try { const j = await relais("/minuterie", { action: "annuler", qui: cfg.qui || "" }); afficherMinuterie(j.minuterie); toast("✓ Extinction programmée annulée : le poêle restera allumé"); setTimeout(chargerHisto, 2500); }
+  catch (e) { toast(`⚠️ ${e.message}`); }
+  $("minAnnuler").disabled = false;
+});
+let minChoisi = 60;
+function majMinFin() {
+  const fin = new Date(Date.now() + minChoisi * 60000);
+  const temp = minConsigne !== null && minConsigne !== consigneActuelle;
+  $("minFin").innerHTML = `Le poêle s'éteindra vers ${hhmm(fin)} (${dureeLib(minChoisi)})${temp ? `<br><small style="color:var(--muted);font-weight:500">Consigne ${fmt(minConsigne)} °C pendant ce temps, puis retour à ${fmt(consigneActuelle)} °C. Le poêle tourne jusqu'au bout, même si la température est atteinte.</small>` : ""}`;
+  document.querySelectorAll("#minDurees button").forEach(b => b.classList.toggle("sel", Number(b.dataset.m) === minChoisi));
+}
+let minConsigne = null, consigneActuelle = null;
+function majMinConsigne() {
+  $("minConsigne").textContent = minConsigne === null ? "--" : `${fmt(minConsigne)} °C`;
+}
+$("minCMoins").addEventListener("click", () => { if (minConsigne !== null) { minConsigne = Math.max(7, minConsigne - 0.5); majMinConsigne(); majMinFin(); } });
+$("minCPlus").addEventListener("click", () => { if (minConsigne !== null) { minConsigne = Math.min(40, minConsigne + 0.5); majMinConsigne(); majMinFin(); } });
+function ouvrirMinuterie() {
+  const r = initial.HEURE_DEBUT ? initial : DEFAUTS, autoOff = !$("auto").checked;
+  $("minTitre").textContent = autoOff ? "🔥 Allumer (mode auto désactivé)" : "🔥 Allumer hors de la plage";
+  $("minIntro").textContent = autoOff
+    ? "Le mode automatique est désactivé : personne n'éteindrait le poêle. Choisis combien de temps le laisser allumé."
+    : `Il est ${heureParisNow().replace(":", "h")}, en dehors de la plage automatique (${r.HEURE_DEBUT.replace(":", "h")} – ${r.HEURE_FIN.replace(":", "h")}). Personne ne l'éteindrait : choisis combien de temps le laisser allumé.`;
+  consigneActuelle = dernierEtat && dernierEtat.consigne !== null && dernierEtat.consigne !== undefined ? Number(dernierEtat.consigne) : null;
+  minConsigne = consigneActuelle; majMinConsigne();
+  $("minDurees").innerHTML = [30, 60, 90, 120, 150, 180].map(m => `<button type="button" data-m="${m}">${dureeLib(m)}</button>`).join("");
+  $("minDurees").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { minChoisi = Number(b.dataset.m); $("minHeure").value = ""; majMinFin(); }));
+  minChoisi = 60; $("minHeure").value = ""; majMinFin();
+  document.documentElement.classList.add("bloque");
+  $("dlgMin").showModal();
+}
+$("minHeure").addEventListener("change", () => {
+  const v = $("minHeure").value; if (!v) return;
+  const [h, m] = v.split(":").map(Number), fin = new Date(); fin.setHours(h, m, 0, 0);
+  if (fin <= new Date()) fin.setDate(fin.getDate() + 1);
+  const min = Math.round((fin - Date.now()) / 60000);
+  if (min < 30 || min > 180) { toast("Choisis une heure entre 30 min et 3 h à partir de maintenant"); $("minHeure").value = ""; return; }
+  minChoisi = min; majMinFin();
+});
+document.querySelectorAll("[data-fermer-min]").forEach(b => b.addEventListener("click", () => $("dlgMin").close()));
+$("dlgMin").addEventListener("click", e => { if (e.target === $("dlgMin")) $("dlgMin").close(); });
+$("dlgMin").addEventListener("close", () => document.documentElement.classList.remove("bloque"));
+$("formMin").addEventListener("submit", e => {
+  e.preventDefault(); $("dlgMin").close();
+  const extra = { minuterie: minChoisi };
+  if (minConsigne !== null && minConsigne !== consigneActuelle) extra.consigne = minConsigne;
+  commande("on", "Allumage en cours", JSON.stringify(extra));
+});
+$("btnOn").addEventListener("click", () => {
+  if (cfg.relais && (horsPlage() || !$("auto").checked)) return ouvrirMinuterie();
+  commande("on", "Allumage en cours");
+});
 $("btnOff").addEventListener("click", () => commande("off", "Extinction en cours"));
 $("btnRefresh").addEventListener("click", () => commande("status", "Relevé en cours"));
 $("btnSave").addEventListener("click", enregistrerReglages);
