@@ -687,6 +687,18 @@ function projection(stock, conso, jours) {
 }
 
 /* ---------- Entretiens ---------- */
+/** Couleur de la jauge : vert juste après l'entretien, puis jaune, orange, rouge foncé à l'échéance ;
+    noir au-delà de 150 % de la fréquence (ex. plus de 10,5 jours pour un entretien tous les 7 jours). */
+function couleurEntretien(ratio) {
+  if (ratio > 1.5) return "#000";
+  const etapes = [[0, [63, 210, 154]], [.4, [242, 209, 75]], [.7, [240, 147, 43]], [1, [158, 27, 27]]];
+  const r = Math.min(1, Math.max(0, ratio));
+  for (let k = 1; k < etapes.length; k++) {
+    const [a, ca] = etapes[k - 1], [b, cb] = etapes[k];
+    if (r <= b) { const t = (r - a) / (b - a); return `rgb(${ca.map((v, i) => Math.round(v + (cb[i] - v) * t)).join(",")})`; }
+  }
+  return "rgb(158,27,27)";
+}
 function vueEntretiens() {
   const p = etat.poele !== "tous" ? etat.poele : etat.entPoele;
   let h = etat.poele === "tous" ? `<div class="gseg">${D.poeles.map(x => `<button data-gentp="${x.id}" class="${p === x.id ? "sel" : ""}"><i class="gpt" style="background:${COULEUR[x.id]}"></i>${esc(courtPoele(x.id))}</button>`).join("")}</div>` : "";
@@ -700,11 +712,12 @@ function vueEntretiens() {
   for (const t of ["regulier", "vitre"]) {
     const d = dernier(t), freq = (R().frequences || {})[t] || (t === "vitre" ? 2 : 7);
     const depuis = d ? ecartJours(d, aujourdhui()) : null, aJour = depuis !== null && depuis <= freq;
-    const pct = depuis === null ? 100 : Math.min(100, depuis / freq * 100);
+    const ratio = depuis === null ? 2 : depuis / freq;
+    const pct = Math.min(100, ratio * 100), coul = couleurEntretien(ratio), noir = ratio > 1.5;
     const teinte = t === "vitre" ? "bleu" : "orange";
     h += `<button class="gcarte gent ${teinte}" data-gact="fait:${t}:${p}"><div class="gligne2"><div class="gtete">${ic(ICONE_ENT[t], teinte)}<b>${TYPES_ENT[t]}</b></div>
       <span class="gbadge ${aJour ? "vert" : "orange"}">${aJour ? (t === "vitre" ? "Propre" : "À jour") : "À faire"}</span></div>
-      <div class="gligne2" style="margin-top:10px"><div class="gtete"><span class="ganneau" style="--p:${pct}"></span><b>${depuis ?? "--"}</b><span class="gpetit">/ ${freq} jours</span></div>
+      <div class="gligne2" style="margin-top:10px"><div class="gtete"><span class="ganneau${noir ? " noir" : ""}" style="--p:${noir ? 100 : pct};--c:${coul}"></span><b>${depuis ?? "--"}</b><span class="gpetit">/ ${freq} jours</span></div>
       <span class="gpetit">${d ? `Fait ${depuis === 0 ? "aujourd'hui" : depuis === 1 ? "hier" : `il y a ${depuis} jours`}` : "Jamais fait"}</span></div></button>`;
   }
   const annexes = ent.filter(e => e.type === "annexe").slice().reverse();

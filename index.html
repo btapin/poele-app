@@ -430,7 +430,8 @@
   .gent.bleu { background: linear-gradient(160deg, #1d2550, #151a2c); border-color: rgba(79,124,255,.4); }
   .gent.violet { background: linear-gradient(160deg, #2a2350, #171a2c); border-color: rgba(122,99,216,.4); }
   .gent b { font-size: 16px; }
-  .ganneau { width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(#3fd29a calc(var(--p) * 1%), rgba(255,255,255,.12) 0); position: relative; flex: none; }
+  .ganneau { width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(var(--c, #3fd29a) calc(var(--p) * 1%), rgba(255,255,255,.12) 0); position: relative; flex: none; }
+  .ganneau.noir { box-shadow: 0 0 0 1px rgba(255,255,255,.45); }
   .ganneau::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #181c2c; }
   .gbouton { width: 100%; margin-top: 12px; padding: 13px; border: 0; border-radius: 16px; color: #fff; font: inherit; font-weight: 600; font-size: 15px; }
   .gbouton.violet { background: linear-gradient(135deg, #8a6cf0, #6a4fd6); }
@@ -666,7 +667,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 24/11 · 00h45</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 24/11 · 00h35</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
