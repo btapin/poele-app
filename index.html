@@ -111,6 +111,52 @@
   .onglets { display: flex; gap: 4px; background: var(--card2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; flex: 1; margin-right: 10px; }
   .onglets button { flex: 1; padding: 8px 2px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; white-space: nowrap; font-weight: 600; }
   .onglets button.sel { background: var(--fire); color: #1a120b; }
+  /* ---------- Sélecteurs d'heure et de date maison (remplacent ceux d'Android) ---------- */
+  .champ-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; margin-top: 6px; padding: 11px 14px;
+    background: var(--card2); border: 1px solid var(--line); border-radius: 12px; color: var(--text); font: inherit; font-size: 16px; font-weight: 600; text-align: left; }
+  .champ-sel .ico { opacity: .7; font-size: 15px; }
+  .champ-sel.vide { color: var(--muted); font-weight: 500; }
+  #gSheet .champ-sel { background: #252a3c; border-color: var(--gbord); border-radius: 14px; padding: 13px 14px; color: var(--gtexte); font-family: "Outfit", system-ui, sans-serif; font-weight: 500; }
+  dialog.picker { width: min(calc(100% - 40px), 360px); padding: 20px; border-radius: 26px; }
+  dialog.picker.g { background: #1b1f2e; border: 1px solid rgba(140,150,190,.16); color: #eef1fa; font-family: "Outfit", system-ui, sans-serif; }
+  .pk-titre { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+  .picker.g .pk-titre { color: #8f97b3; }
+  .pk-apercu { font-size: 40px; font-weight: 700; text-align: center; letter-spacing: 1px; margin: 2px 0 10px; }
+  .pk-roues { position: relative; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .pk-roues::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 46px; margin-top: -23px; border-radius: 14px;
+    background: rgba(255,122,47,.14); border: 1px solid rgba(255,122,47,.45); pointer-events: none; }
+  .picker.g .pk-roues::before { background: rgba(79,124,255,.16); border-color: rgba(79,124,255,.5); }
+  .pk-sep { font-size: 26px; font-weight: 700; position: relative; }
+  .roue { height: 230px; width: 86px; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; position: relative;
+    -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
+  .roue::-webkit-scrollbar { display: none; }
+  .roue div { height: 46px; line-height: 46px; text-align: center; font-size: 24px; font-weight: 600; scroll-snap-align: center; color: var(--muted); transition: color .15s, transform .15s; }
+  .roue div.actif { color: var(--text); transform: scale(1.12); }
+  .picker.g .roue div { color: #8f97b3; } .picker.g .roue div.actif { color: #fff; }
+  .pk-raccourcis { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+  .pk-raccourcis button { padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; }
+  .picker.g .pk-raccourcis button { background: #252a3c; border-color: rgba(140,150,190,.16); color: #dfe6ff; }
+  .pk-err { min-height: 18px; margin-top: 8px; text-align: center; font-size: 13px; color: var(--bad); }
+  .pk-boutons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .pk-boutons button { padding: 13px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font: inherit; font-size: 15px; font-weight: 700; }
+  .pk-boutons .ok { border: 0; background: linear-gradient(135deg, var(--fire2), var(--fire)); color: #1a120b; }
+  .picker.g .pk-boutons button { background: #252a3c; border-color: rgba(140,150,190,.16); color: #eef1fa; }
+  .picker.g .pk-boutons .ok { background: linear-gradient(135deg, #5a82ff, #3d5bdc); color: #fff; border: 0; }
+  .pk-mois { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 10px; }
+  .pk-mois b { font-size: 17px; text-transform: capitalize; }
+  .pk-mois button { width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 18px; }
+  .picker.g .pk-mois button { background: #252a3c; border-color: rgba(140,150,190,.16); color: #eef1fa; }
+  .pk-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+  .pk-grille span { font-size: 11.5px; color: var(--muted); padding: 4px 0; }
+  .picker.g .pk-grille span { color: #8f97b3; }
+  .pk-grille button { aspect-ratio: 1; border: 0; border-radius: 12px; background: transparent; color: var(--text); font: inherit; font-size: 15px; font-weight: 500; }
+  .picker.g .pk-grille button { color: #eef1fa; }
+  .pk-grille button.auj { box-shadow: inset 0 0 0 1.5px var(--fire2); }
+  .picker.g .pk-grille button.auj { box-shadow: inset 0 0 0 1.5px #5a82ff; }
+  .pk-grille button.sel { background: linear-gradient(135deg, var(--fire2), var(--fire)); color: #1a120b; font-weight: 700; }
+  .picker.g .pk-grille button.sel { background: linear-gradient(135deg, #5a82ff, #3d5bdc); color: #fff; }
+  .pk-grille button:disabled { opacity: .25; }
+  .minfin.err { color: var(--bad); }
   .minuterie { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 14px;
     background: rgba(255,179,71,.1); border: 1px solid rgba(255,179,71,.35); }
   .minuterie[hidden] { display: none; }
@@ -620,7 +666,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 23/11 · 23h55</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 24/11 · 00h45</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -635,6 +681,7 @@
   </div>
 </nav>
 <dialog id="gSheet"></dialog>
+<dialog id="picker" class="picker"></dialog>
 <dialog id="dlgMin">
   <form method="dialog" id="formMin">
     <div class="dhead"><h2 id="minTitre">🔥 Allumer avec minuterie</h2><button class="icon-btn" type="button" data-fermer-min aria-label="Fermer">✕</button></div>
@@ -1217,6 +1264,126 @@ $("btnForgetYes").addEventListener("click", () => {
 });
 
 /* ---------- Démarrage ---------- */
+/* ---------- Sélecteurs d'heure et de date maison (remplacent ceux d'Android) ---------- */
+const picker = $("picker");
+picker.addEventListener("click", e => { if (e.target === picker) picker.close(); });
+picker.addEventListener("close", () => { if (!document.querySelector("dialog[open]")) document.documentElement.classList.remove("bloque"); });
+const pad2 = n => String(n).padStart(2, "0");
+function roue(valeurs, sel) {
+  return `<div class="roue"><div></div><div></div>${valeurs.map(v => `<div data-v="${v}">${pad2(v)}</div>`).join("")}<div></div><div></div></div>`;
+}
+function brancherRoue(el, valeurs, sel, change) {
+  const H = 46, items = [...el.querySelectorAll("[data-v]")];
+  let i = Math.max(0, valeurs.indexOf(sel));
+  const marquer = () => items.forEach((x, k) => x.classList.toggle("actif", k === i));
+  el.scrollTop = i * H; marquer();
+  let t;
+  el.addEventListener("scroll", () => {
+    const n = Math.min(valeurs.length - 1, Math.max(0, Math.round(el.scrollTop / H)));
+    if (n !== i) { i = n; marquer(); change(valeurs[i]); }
+    clearTimeout(t); t = setTimeout(() => el.scrollTo({ top: i * H, behavior: "smooth" }), 120);
+  });
+  items.forEach((x, k) => x.addEventListener("click", () => el.scrollTo({ top: k * H, behavior: "smooth" })));
+  return { aller: v => { const k = valeurs.indexOf(v); if (k >= 0) { el.scrollTop = k * H; i = k; marquer(); change(v); } } };
+}
+/** Choisir une heure « HH:MM ». opts : { titre, theme ("g" pour Granulés), pas (minutes), raccourcis: [{lib, val}], verifier(v) → message d'erreur ou "" } */
+function choisirHeure(valeur, opts = {}) {
+  return new Promise(resolve => {
+    const pas = opts.pas || 5;
+    let [h, m] = (valeur && /^\d\d:\d\d$/.test(valeur) ? valeur : "12:00").split(":").map(Number);
+    m = Math.round(m / pas) * pas; if (m >= 60) m = 60 - pas;
+    const heures = [...Array(24).keys()], minutes = [...Array(60 / pas).keys()].map(k => k * pas);
+    picker.className = "picker " + (opts.theme || "");
+    picker.innerHTML = `<div class="pk-titre">${esc(opts.titre || "Choisir une heure")}</div><div class="pk-apercu"></div>
+      <div class="pk-roues">${roue(heures)}<span class="pk-sep">:</span>${roue(minutes)}</div>
+      ${opts.raccourcis ? `<div class="pk-raccourcis">${opts.raccourcis.map((r, k) => `<button type="button" data-k="${k}">${esc(r.lib)}</button>`).join("")}</div>` : ""}
+      <div class="pk-err"></div>
+      <div class="pk-boutons"><button type="button" data-x>Annuler</button><button type="button" class="ok" data-ok>Valider</button></div>`;
+    const ap = picker.querySelector(".pk-apercu"), err = picker.querySelector(".pk-err");
+    const val = () => `${pad2(h)}:${pad2(m)}`;
+    const maj = () => { ap.textContent = val(); err.textContent = opts.verifier ? opts.verifier(val()) : ""; };
+    const [rh, rm] = picker.querySelectorAll(".roue");
+    const RH = brancherRoue(rh, heures, h, v => { h = v; maj(); }), RM = brancherRoue(rm, minutes, m, v => { m = v; maj(); });
+    picker.querySelectorAll("[data-k]").forEach(b => b.addEventListener("click", () => {
+      const [a, b2] = opts.raccourcis[b.dataset.k].val.split(":").map(Number); RH.aller(a); RM.aller(Math.round(b2 / pas) * pas % 60);
+    }));
+    let fini = false;
+    const finir = v => { if (fini) return; fini = true; picker.close(); resolve(v); };
+    picker.querySelector("[data-x]").addEventListener("click", () => finir(null));
+    picker.querySelector("[data-ok]").addEventListener("click", () => { if (opts.verifier && opts.verifier(val())) return maj(); finir(val()); });
+    picker.addEventListener("close", () => finir(null), { once: true });
+    document.documentElement.classList.add("bloque");
+    picker.showModal(); maj();
+    requestAnimationFrame(() => { rh.scrollTop = heures.indexOf(h) * 46; rm.scrollTop = minutes.indexOf(m) * 46; });
+  });
+}
+/** Choisir une date « AAAA-MM-JJ » avec un calendrier. opts : { titre, theme, max } */
+function choisirDate(valeur, opts = {}) {
+  return new Promise(resolve => {
+    const iso = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const auj = iso(new Date());
+    let sel = valeur && /^\d{4}-\d\d-\d\d$/.test(valeur) ? valeur : auj;
+    let vue = new Date(Number(sel.slice(0, 4)), Number(sel.slice(5, 7)) - 1, 1);
+    picker.className = "picker " + (opts.theme || "");
+    const dessiner = () => {
+      const premier = (vue.getDay() + 6) % 7, n = new Date(vue.getFullYear(), vue.getMonth() + 1, 0).getDate();
+      let cases = "";
+      for (let k = 0; k < premier; k++) cases += "<i></i>";
+      for (let j = 1; j <= n; j++) {
+        const d = iso(new Date(vue.getFullYear(), vue.getMonth(), j));
+        cases += `<button type="button" data-d="${d}" class="${d === sel ? "sel" : ""} ${d === auj ? "auj" : ""}" ${opts.max && d > opts.max ? "disabled" : ""}>${j}</button>`;
+      }
+      picker.innerHTML = `<div class="pk-titre">${esc(opts.titre || "Choisir une date")}</div>
+        <div class="pk-apercu" style="font-size:22px">${new Date(sel + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        <div class="pk-mois"><button type="button" data-m="-1">‹</button><b>${vue.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</b><button type="button" data-m="1">›</button></div>
+        <div class="pk-grille">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span>${x}</span>`).join("")}${cases}</div>
+        <div class="pk-raccourcis"><button type="button" data-auj>Aujourd'hui</button><button type="button" data-hier>Hier</button></div>
+        <div class="pk-boutons"><button type="button" data-x>Annuler</button><button type="button" class="ok" data-ok>Valider</button></div>`;
+      picker.querySelectorAll("[data-m]").forEach(b => b.addEventListener("click", () => { vue.setMonth(vue.getMonth() + Number(b.dataset.m)); dessiner(); }));
+      picker.querySelectorAll("[data-d]").forEach(b => b.addEventListener("click", () => { sel = b.dataset.d; dessiner(); }));
+      picker.querySelector("[data-auj]").addEventListener("click", () => { sel = auj; vue = new Date(); vue.setDate(1); dessiner(); });
+      picker.querySelector("[data-hier]").addEventListener("click", () => { const d = new Date(); d.setDate(d.getDate() - 1); sel = iso(d); vue = new Date(d.getFullYear(), d.getMonth(), 1); dessiner(); });
+      picker.querySelector("[data-x]").addEventListener("click", () => finir(null));
+      picker.querySelector("[data-ok]").addEventListener("click", () => finir(sel));
+    };
+    let fini = false;
+    const finir = v => { if (fini) return; fini = true; picker.close(); resolve(v); };
+    picker.addEventListener("close", () => finir(null), { once: true });
+    dessiner();
+    document.documentElement.classList.add("bloque");
+    picker.showModal();
+  });
+}
+/** Remplace un <input type="time"> ou "date" par un bouton qui ouvre le sélecteur maison.
+    L'input reste (caché) : le reste du code lit et écrit sa valeur comme avant. */
+function ameliorerChamp(input, opts = {}) {
+  if (input.dataset.ameliore) return;
+  const type = input.type === "date" ? "date" : "time";
+  input.dataset.ameliore = "1";
+  const bouton = document.createElement("button");
+  bouton.type = "button"; bouton.className = "champ-sel";
+  input.insertAdjacentElement("afterend", bouton);
+  input.type = "hidden";
+  const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  const maj = () => {
+    const v = proto.get.call(input);
+    bouton.classList.toggle("vide", !v);
+    bouton.innerHTML = `<span>${v ? (type === "date" ? new Date(v + "T12:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : v.replace(":", "h")) : (opts.vide || "Choisir")}</span><span class="ico">${type === "date" ? "📅" : "🕒"}</span>`;
+  };
+  Object.defineProperty(input, "value", { get() { return proto.get.call(this); }, set(v) { proto.set.call(this, v); maj(); }, configurable: true });
+  maj();
+  bouton.addEventListener("click", async () => {
+    const o = typeof opts.options === "function" ? opts.options() : opts;
+    const v = await (type === "date" ? choisirDate(input.value, o) : choisirHeure(input.value || (o.defaut && o.defaut()), o));
+    if (v === null) return;
+    input.value = v;
+    input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+window.ameliorerChamp = ameliorerChamp;
+ameliorerChamp($("debut"), { titre: "Début de la plage automatique", pas: 5 });
+ameliorerChamp($("fin"), { titre: "Fin de la plage automatique", pas: 5 });
+
 /* ---------- Minuterie : allumage en dehors de la plage du mode automatique ---------- */
 let minuterie = {};
 const heureParisNow = () => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
@@ -1276,13 +1443,21 @@ function ouvrirMinuterie() {
   document.documentElement.classList.add("bloque");
   $("dlgMin").showModal();
 }
-$("minHeure").addEventListener("change", () => {
-  const v = $("minHeure").value; if (!v) return;
+const minutesJusqua = v => {
   const [h, m] = v.split(":").map(Number), fin = new Date(); fin.setHours(h, m, 0, 0);
   if (fin <= new Date()) fin.setDate(fin.getDate() + 1);
-  const min = Math.round((fin - Date.now()) / 60000);
-  if (min < 30 || min > 180) { toast("Choisis une heure entre 30 min et 3 h à partir de maintenant"); $("minHeure").value = ""; return; }
-  minChoisi = min; majMinFin();
+  return Math.ceil((fin - Date.now()) / 60000);
+};
+ameliorerChamp($("minHeure"), { vide: "Choisir une heure", options: () => {
+  const dans = n => { const d = new Date(Date.now() + n * 60000); return `${pad2(d.getHours())}:${pad2(Math.ceil(d.getMinutes() / 5) * 5 % 60)}`; };
+  return {
+    titre: "Éteindre le poêle à…", pas: 5, defaut: () => dans(60),
+    verifier: v => { const n = minutesJusqua(v); return n < 30 ? "Au moins 30 min à partir de maintenant" : n > 180 ? "3 h maximum à partir de maintenant" : ""; },
+  };
+} });
+$("minHeure").addEventListener("change", () => {
+  const v = $("minHeure").value; if (!v) return;
+  minChoisi = Math.min(180, Math.max(30, minutesJusqua(v))); majMinFin();
 });
 document.querySelectorAll("[data-fermer-min]").forEach(b => b.addEventListener("click", () => $("dlgMin").close()));
 $("dlgMin").addEventListener("click", e => { if (e.target === $("dlgMin")) $("dlgMin").close(); });

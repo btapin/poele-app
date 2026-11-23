@@ -722,6 +722,8 @@ function ouvrirFeuille(html, init, style = "bas") {
   d.querySelectorAll("[data-gfermer]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); d.close(); }));
   document.documentElement.classList.add("bloque");
   if (!d.open) d.showModal();
+  // Dates : calendrier maison aux couleurs de l'onglet Granulés
+  if (window.ameliorerChamp) d.querySelectorAll('input[type="date"]').forEach(i => ameliorerChamp(i, { theme: "g", titre: "Date" }));
   if (init) init(d);
 }
 $("gSheet").addEventListener("close", () => document.documentElement.classList.remove("bloque"));
