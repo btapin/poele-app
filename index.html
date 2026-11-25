@@ -468,6 +468,14 @@
   /* Fenêtres */
   #gSheet { background: #1b1f2e; border: 1px solid var(--gbord); color: var(--gtexte); padding: 20px; }
   #gSheet.bas { margin: auto auto 0; width: 100%; max-width: 480px; border-radius: 28px 28px 0 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); max-height: 92vh; }
+  #gSheet.plein { width: 100%; max-width: 100%; height: 100%; max-height: 100%; margin: 0; border-radius: 0; border: 0; padding: calc(16px + env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom)); }
+  .gagrandir { position: relative; }
+  .gplein { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; font-size: 16px; z-index: 2; }
+  .gagrandir > .gseg { margin-right: 44px; }
+  .gdefil { overflow-x: auto; margin: 6px -16px 0; padding: 0 16px 6px; scrollbar-width: thin; }
+  .gdefil .gsvg { max-width: none; }
+  .gdefil .gtit { position: sticky; left: 0; display: inline-block; }
+  #gSheet .gpilule select { width: auto; margin: 0; padding: 2px 0; background: transparent; border: 0; }
   #gSheet.centre { width: min(calc(100% - 36px), 420px); border-radius: 30px; padding: 24px; }
   #gSheet::backdrop { background: rgba(5,6,12,.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   #gSheet h2 { margin: 0; font-size: 20px; font-weight: 600; }
@@ -667,7 +675,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 24/11 · 00h35</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 12h50</div>
 </dialog>
 
 <div class="toast" id="toast"></div>

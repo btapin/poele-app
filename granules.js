@@ -217,10 +217,10 @@ function ressenti(t) {
 }
 
 /* ---------- Graphiques (SVG faits main, sans double axe) ---------- */
-function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, etiquettes = true, unite = "", temperatures = null } = {}) {
+function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, etiquettes = true, unite = "", temperatures = null, largeur = null } = {}) {
   const valsT = temperatures ? temperatures.flatMap(s => s.pts).filter(v => v !== null && v !== undefined) : [];
   const avecT = valsT.length > 0;
-  const W = avecT ? 290 : 320, H = hauteur, bas = 18, haut = 14;
+  const W = largeur || (avecT ? 290 : 320), H = hauteur, bas = 18, haut = 14;
   const k = cles || Object.keys(couleurs);
   const tot = c => k.reduce((x, kk) => x + (c.valeurs[kk] || 0), 0);
   const avecFantome = cols.some(c => c.fantome !== undefined);
@@ -229,7 +229,7 @@ function barres(cols, { cle, hauteur = 130, couleurs = COULEUR, cles = null, eti
   const larg = avecFantome ? Math.min(15, pas * .34) : Math.min(26, pas * .62);
   const y0 = H - bas, echelle = v => (v / max) * (H - bas - haut);
   if (cle) infos[cle] = cols.map(c => c.info || "");
-  let svg = `<svg viewBox="0 0 ${avecT ? 320 : W} ${H}" class="gsvg">`;
+  let svg = `<svg viewBox="0 0 ${avecT ? W + 30 : W} ${H}" class="gsvg"${largeur ? ` style="width:${avecT ? W + 30 : W}px"` : ""}>`;
   for (let i = 1; i <= 3; i++) svg += `<line x1="0" x2="${W}" y1="${y0 - (H - bas - haut) * i / 3}" y2="${y0 - (H - bas - haut) * i / 3}" class="ggrille"/>`;
   svg += `<line x1="0" x2="${W}" y1="${y0 + .5}" y2="${y0 + .5}" class="gaxe"/>`;
   cols.forEach((c, i) => {
@@ -542,7 +542,8 @@ function vueStats() {
       : { lab: MOIS_COURT[m - 1], valeurs: { e: Math.round(ce) }, fantome: Math.round(cp),
           info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${euros(ce)} de granulés brûlés${ce && `${a}-${pad(m)}-01` <= aujourdhui() ? ` · soit ${euros(ce / (finMois <= aujourdhui() ? new Date(a, m, 0).getDate() : jours))} / jour` : ""}<br>${nomSaison(prec)} : ${euros(cp)}` };
   });
-  h += `<section class="gcarte">
+  h += `<section class="gcarte gagrandir">
+    <button class="gbtn-ic gplein" data-gagrandir="1" aria-label="Agrandir">⤢</button>
     <div class="gseg">${[["sacs", "🔥 Sacs brûlés"], ["euros", "€ Coût brûlé"]].map(([id, l]) => `<button data-gstatmois="${id}" class="${etat.statMois === id ? "sel" + (id === "euros" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
     ${legende([pastille(C_PASSE, nomSaison(prec)), ...(sacs ? (cles.length > 1 ? cles.map(k => pastille(COULEUR[k], `${nomSaison(sel)} · ${courtPoele(k)}`)) : [pastille(COULEUR[cles[0]], nomSaison(sel))]) : [pastille(C_EUROS, nomSaison(sel))]),
       `<button class="gmeteo${etat.meteoGraphe ? " sel" : ""}" data-gmeteo="1">🌡️ Météo ${etat.meteoGraphe ? "✓" : ""}</button>`])}
@@ -657,6 +658,71 @@ function vueStats() {
     }).join("")}</div></section>`;
   return h;
 }
+/* ---------- Vue agrandie : la saison semaine par semaine ---------- */
+function semainesSaison(a) {          // lundis de la saison, du début au dernier jour
+  const deb = date(debutSaison(a)); deb.setDate(deb.getDate() - ((deb.getDay() + 6) % 7));
+  const fin = finSaison(a), out = [];
+  for (let d = iso(deb); d <= fin; d = ajouterJours(d, 7)) out.push(d);
+  return out;
+}
+function vueGrand(d) {
+  const saisons = saisonsConnues();
+  const sel = etat.saisonStats && saisons.includes(etat.saisonStats) ? etat.saisonStats : saisonCourante();
+  const prec = sel - 1, cles = clesPoeles(), sacs = etat.statMois === "sacs", couts = coutsBrulages();
+  const sem = semainesSaison(sel), semP = semainesSaison(prec), auj = aujourdhui();
+  const br = D.brulages.filter(b => dePoele(b));
+  const PX = 30;
+  const cols = sem.map((lundi, i) => {
+    const fin = ajouterJours(lundi, 6), l = br.filter(b => b.date >= lundi && b.date <= fin);
+    const lp0 = semP[i], lp = lp0 ? br.filter(b => b.date >= lp0 && b.date <= ajouterJours(lp0, 6)) : [];
+    const t = tempMoyenne(lundi, fin), tp = lp0 ? tempMoyenne(lp0, ajouterJours(lp0, 6)) : null;
+    const mc = avecChauffe() && fin >= debutJournal() ? minutesChauffe(lundi, fin) : null;
+    const dl = date(lundi), nouveauMois = i === 0 || dl.getMonth() !== date(sem[i - 1]).getMonth();
+    const val = sacs ? valeursPoeles(l) : { e: Math.round(coutDe(l, couts) * 100) / 100 };
+    const valP = sacs ? somme(lp) : Math.round(coutDe(lp, couts));
+    return { lab: nouveauMois ? MOIS_COURT[dl.getMonth()] : "", valeurs: val, fantome: valP, fort: lundi <= auj && auj <= fin,
+      info: `<b>Semaine du ${dateCourte(lundi)} au ${dateCourte(fin)}</b><br>${nomSaison(sel)} : ${sacs ? sacsTxt(somme(l)) : euros(coutDe(l, couts))}${t !== null ? ` · ${temp(t)}` : ""}${mc !== null ? ` · ⏱️ ${duree(mc)} de chauffe` : ""}`
+        + (lp0 ? `<br>${nomSaison(prec)} (${dateCourte(lp0)}) : ${sacs ? sacsTxt(somme(lp)) : euros(coutDe(lp, couts))}${tp !== null ? ` · ${temp(tp)}` : ""}` : "") };
+  });
+  const W = sem.length * PX;
+  const temps = etat.meteoGraphe && meteo ? [
+    { pts: sem.map((_, i) => semP[i] ? tempMoyenne(semP[i], ajouterJours(semP[i], 6)) : null), couleur: "#7f9cc9", tirets: true },
+    { pts: sem.map(l => tempMoyenne(l, ajouterJours(l, 6))), couleur: C_TEMP }] : null;
+  const dj = debutJournal();
+  const heures = avecChauffe() ? barres(sem.map(l => { const fin = ajouterJours(l, 6), m = fin < dj ? null : minutesChauffe(l, fin);
+    return { lab: "", valeurs: { h: m ? Math.round(m / 6) / 10 : 0 }, info: "" }; }), { cles: ["h"], couleurs: { h: C_HEURES }, hauteur: 80, unite: "h", largeur: W, etiquettes: true }) : "";
+  const total = cols.reduce((x, c) => x + Object.values(c.valeurs).reduce((a, b) => a + b, 0), 0);
+  d.querySelector("#gGrandCorps").innerHTML = `
+    <div class="gseg">${[["sacs", "🔥 Sacs brûlés"], ["euros", "€ Coût brûlé"]].map(([id, l]) => `<button type="button" data-gstatmois="${id}" class="${etat.statMois === id ? "sel" + (id === "euros" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
+    <div class="gligne2"><div class="gpilule" style="margin:0"><span>📅</span><select id="gGrandSaison">${saisons.slice().reverse().map(a => `<option value="${a}" ${a === sel ? "selected" : ""}>Saison ${nomSaison(a)}</option>`).join("")}</select></div>
+      <button type="button" class="gmeteo${etat.meteoGraphe ? " sel" : ""}" data-gmeteo="1">🌡️ Météo ${etat.meteoGraphe ? "✓" : ""}</button></div>
+    ${legende([pastille(C_PASSE, nomSaison(prec)), ...(sacs ? cles.map(k => pastille(COULEUR[k], `${nomSaison(sel)}${cles.length > 1 ? " · " + courtPoele(k) : ""}`)) : [pastille(C_EUROS, nomSaison(sel))]),
+      ...(temps ? [pastille("#7f9cc9", `°C ${nomSaison(prec)}`, true), pastille(C_TEMP, `°C ${nomSaison(sel)}`)] : [])])}
+    <div class="gdefil" id="gDefil">
+      ${barres(cols, { cle: "gw", cles: sacs ? cles : ["e"], couleurs: sacs ? COULEUR : { e: C_EUROS }, hauteur: 230, largeur: W, temperatures: temps, etiquettes: true, unite: sacs ? "" : "€" }).replace(/<div class="ginfo"[^>]*><\/div>$/, "")}
+      ${heures ? `<div class="gtit gpetit" style="margin-top:10px">⏱️ Heures de chauffe · Salon</div>${heures}` : ""}
+    </div>
+    <div class="ginfo" id="info-gw">Touche une semaine pour le détail.</div>
+    <div class="gpetit gcentre" style="margin-top:8px">Total de la saison : <b>${sacs ? sacsTxt(total) : euros(total)}</b> · fais glisser le graphique de côté</div>`;
+  // place la semaine en cours au centre
+  const defil = d.querySelector("#gDefil"), k = sem.findIndex((l, i) => l <= auj && auj <= ajouterJours(l, 6));
+  if (k >= 0) defil.scrollLeft = Math.max(0, k * PX - defil.clientWidth / 2);
+}
+function ouvrirGrand() {
+  ouvrirFeuille(`<div class="dhead"><div class="gtete">${ic("📊", "orange")}<h2>Semaine par semaine</h2></div><button class="gbtn-ic" data-gfermer type="button" aria-label="Fermer">✕</button></div><div id="gGrandCorps"></div>`, d => {
+    vueGrand(d);
+    const corps = d.querySelector("#gGrandCorps");
+    corps.addEventListener("click", ev => {
+      const z = ev.target.closest("[data-gtap]");
+      if (z) { const [cle, i] = z.dataset.gtap.split(":"); const el = d.querySelector(`#info-${cle}`); if (el && infos[cle]) el.innerHTML = infos[cle][i] || ""; return; }
+      const b = ev.target.closest("button"); if (!b) return;
+      if (b.dataset.gstatmois) { etat.statMois = b.dataset.gstatmois; vueGrand(d); rendre(); }
+      if (b.dataset.gmeteo) { etat.meteoGraphe = !etat.meteoGraphe; store.set("g.meteoGraphe", etat.meteoGraphe ? "oui" : "non"); vueGrand(d); rendre(); }
+    });
+    corps.addEventListener("change", ev => { if (ev.target.id === "gGrandSaison") { etat.saisonStats = Number(ev.target.value); vueGrand(d); rendre(); } });
+  }, "plein");
+}
+
 function courbesPrix(ach) {
   const W = 320, H = 110, vals = ach.map(a => a.prixSac), min = Math.min(...vals), max = Math.max(...vals);
   const bas = min === max ? min - .5 : min - (max - min) * .2, haut = min === max ? max + .5 : max + (max - min) * .2;
@@ -1053,6 +1119,7 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gmeteo) { etat.meteoGraphe = !etat.meteoGraphe; store.set("g.meteoGraphe", etat.meteoGraphe ? "oui" : "non"); return rendre(); }
   if (ds.gmarqueprix) { etat.marquePrix = ds.gmarqueprix; return rendre(); }
   if (ds.gdetail) return detail(ds.gdetail);
+  if (ds.gagrandir) return ouvrirGrand();
   if (t.id === "gPlus") return basculerRadial(!radial.classList.contains("ouvert"));
   if (t.id === "gReglages") return feuilleReglages();
   if (ds.gcase) {
