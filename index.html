@@ -157,6 +157,16 @@
   .picker.g .pk-grille button.sel { background: linear-gradient(135deg, #5a82ff, #3d5bdc); color: #fff; }
   .pk-grille button:disabled { opacity: .25; }
   .minfin.err { color: var(--bad); }
+  /* Jauge du réservoir */
+  .gres { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; margin-top: 12px; }
+  .gres.g { grid-column: 1 / -1; margin: 0; background: linear-gradient(150deg, #1d2a3a, #151a2c); border: 1px solid rgba(140,150,190,.16); font-family: "Outfit", system-ui, sans-serif; color: #eef1fa; }
+  .gres.p { background: var(--card2); border: 1px solid var(--line); }
+  .gres-cuve { position: relative; width: 40px; height: 58px; flex: none; border-radius: 8px 8px 12px 12px; border: 2px solid rgba(255,255,255,.35); overflow: hidden; background: rgba(255,255,255,.05); }
+  .gres-cuve i { position: absolute; left: 0; right: 0; bottom: 0; transition: height .6s; }
+  .gres-cuve span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  .gres-txt { flex: 1; min-width: 0; } .gres-txt b { display: block; font-size: 15px; } .gres-txt small { display: block; font-size: 12.5px; color: var(--muted); }
+  .gres.g .gres-txt small { color: #8f97b3; }
+  .gres-btn { flex: none; padding: 10px 12px; border-radius: 12px; border: 0; font: inherit; font-weight: 700; font-size: 14px; color: #fff; background: linear-gradient(135deg, #2bc48a, #1d9468); }
   .option-auto { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
   .ligne-switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; font-size: 14.5px; }
   .option-auto .grid2[hidden], #absHint[hidden] { display: none; }
@@ -568,6 +578,7 @@
         <button class="main b-off" id="btnOff">✖ Éteindre</button>
         <button class="main b-refresh" id="btnRefresh">↻ Relever la température maintenant</button>
       </div>
+      <div id="jaugeRes"></div>
       <div class="minuterie" id="minuterie" hidden>
         <span>⏱️</span><div><b id="minTexte"></b><small id="minSous"></small></div>
         <button class="small-btn" id="minAnnuler">Annuler</button>
@@ -708,7 +719,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 19h30</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 18h50</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -1467,6 +1478,11 @@ ameliorerChamp($("absFin"), { titre: "Absent jusqu'au (inclus)", vide: "Choisir 
 
 /* ---------- Minuterie : allumage en dehors de la plage du mode automatique ---------- */
 let minuterie = {};
+/* Jauge du réservoir du salon sur l'écran Poêle (calculée par le module Granulés) */
+function majJaugeRes() { if (window.granules && granules.estCharge()) $("jaugeRes").innerHTML = granules.htmlReservoir("p"); }
+window.addEventListener("reservoir", majJaugeRes);
+$("jaugeRes").addEventListener("click", e => { if (e.target.closest("[data-gremplir]")) granules.remplirReservoir(); });
+setInterval(majJaugeRes, 60000);
 const heureParisNow = () => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
 const hhmm = d => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
 const dureeLib = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? " " + String(m % 60).padStart(2, "0") : ""}`;
@@ -1569,6 +1585,7 @@ async function demarrer() {
   const ok = !!cfg.token;
   $("welcome").hidden = ok; $("nav").hidden = !ok; document.body.classList.toggle("avec-nav", ok);
   montrerVue("poele");   // l'appli s'ouvre toujours sur le poêle ; Granulés rouvre le dernier onglet consulté
+  if (ok && window.granules && !granules.estCharge()) granules.charger();
   if (!ok) return;
   try {
     await Promise.all([chargerEtat(), chargerAuto(), chargerReglages(), chargerHisto()]);

@@ -17,7 +17,7 @@ const ICONE_ENT = { annuel: "🛠️", regulier: "🧹", vitre: "✨", annexe: "
 const VILLE_DEFAUT = { nom: "Bouhet", lat: 46.166, lon: -0.859 };
 const BASE_DJU = 18;
 
-let D = null, chauffes = null, meteo = null;
+let D = null, chauffes = null, meteo = null, reservoir = null;
 let ecriture = false;
 const infos = {};            // textes affichés au toucher d'une barre / d'un point
 const etat = {
@@ -219,6 +219,70 @@ function ressenti(t) {
   return t < 0 ? "Glacial" : t < 5 ? "Très froid" : t < 10 ? "Froid" : t < 15 ? "Frais" : t < 20 ? "Doux" : "Chaud";
 }
 
+/* ---------- Réservoir du salon ---------- */
+/** Minutes de chauffe depuis un instant (ms) */
+function minutesDepuis(ms) {
+  if (!chauffes) return 0;
+  let m = 0;
+  const seg = (d, f) => { const a = Math.max(d, ms), b = Math.min(f, Date.now()); if (b > a) m += (b - a) / 60000; };
+  for (const c of chauffes.liste || []) seg(Date.parse(c.debut), Date.parse(c.fin));
+  if (chauffes.enCours) seg(Date.parse(chauffes.enCours.debut), Date.now());
+  return Math.round(m);
+}
+/** État du réservoir : dernier remplissage (bouton ou sac déclaré), heures de chauffe depuis, autonomie estimée */
+function etatReservoir() {
+  if (!D) return null;
+  const capa = Number(R().reservoir) || 0.5;
+  const sacsSalon = D.brulages.filter(b => b.poele === "salon" && b.cree);
+  const pleins = ((reservoir && reservoir.recharges) || []).map(x => ({ le: x.le, qui: x.qui, type: "rempli" }))
+    .concat(sacsSalon.map(b => ({ le: b.cree, qui: b.qui, type: "sac" }))).sort((a, b) => a.le < b.le ? 1 : -1);
+  const dernier = pleins[0];
+  const hps = rendementSalon().parSac;
+  const autonomie = hps ? hps * capa : null;
+  const heures = dernier ? minutesDepuis(Date.parse(dernier.le)) / 60 : null;
+  const dernierSac = sacsSalon.map(b => b.cree).sort().pop() || "";
+  const depuisSac = ((reservoir && reservoir.recharges) || []).filter(x => x.le > dernierSac).length;
+  const reste = autonomie !== null && heures !== null ? Math.max(0, 1 - heures / autonomie) : null;
+  return { capa, dernier, heures, autonomie, reste, depuisSac, parSac: Math.round(1 / capa) };
+}
+function couleurReservoir(reste) {
+  return reste === null ? "#5d6178" : reste > .5 ? "#3fd29a" : reste > .25 ? "#f2d14b" : reste > .1 ? "#f0932b" : "#e04848";
+}
+/** Jauge du réservoir (utilisée dans Granulés et sur l'écran Poêle) */
+function htmlReservoir(theme = "g") {
+  const e = etatReservoir(); if (!e) return "";
+  const pct = e.reste === null ? null : Math.round(e.reste * 100), coul = couleurReservoir(e.reste);
+  const quand = e.dernier ? new Date(e.dernier.le) : null;
+  const lib = quand ? `${quand.toDateString() === new Date().toDateString() ? "aujourd'hui" : quand.toLocaleDateString("fr-FR", { weekday: "long" })} à ${quand.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}` : "";
+  const restant = e.autonomie !== null && e.heures !== null ? Math.max(0, e.autonomie - e.heures) : null;
+  return `<div class="gres ${theme}">
+    <div class="gres-cuve"><i style="height:${pct ?? 0}%;background:${coul}"></i><span>${pct === null ? "?" : pct + "%"}</span></div>
+    <div class="gres-txt"><b>Réservoir du salon</b>
+      <small>${e.dernier ? `Rempli ${lib}${e.dernier.qui ? ` par ${esc(e.dernier.qui)}` : ""}` : "Jamais rempli dans l'appli"}</small>
+      <small>${e.autonomie === null ? "Autonomie apprise après deux sacs déclarés au salon" : restant !== null ? `≈ ${duree(Math.round(restant * 60))} de chauffe restante · ${nb(e.heures)} h / ${nb(e.autonomie)} h` : ""}</small></div>
+    <button class="gres-btn" data-gremplir="1">🪣 Rempli</button></div>`;
+}
+async function remplirReservoir() {
+  if (!cfg.relais) return toast("Nécessite le relais Cloudflare");
+  try {
+    const j = await relais("/reservoir", { qui: cfg.qui || "" });
+    reservoir = j.reservoir; rendre(); window.dispatchEvent(new Event("reservoir"));
+    const e = etatReservoir();
+    if (e && e.depuisSac >= e.parSac) {
+      ouvrirFeuille(`${tete("🔥", "Sac terminé ?")}
+        <p class="sub" style="font-size:15px">C'est le ${e.depuisSac}ᵉ remplissage depuis le dernier sac déclaré (un sac = ${e.parSac} remplissages). Déclarer un sac brûlé au salon ?</p>
+        <button class="gvalider orange" type="button" data-oui>🔥 Oui, 1 sac brûlé au salon</button>
+        <button class="save" type="button" data-gfermer>Pas encore</button>`, d => {
+        d.querySelector("[data-oui]").addEventListener("click", async ev => {
+          ev.target.disabled = true;
+          try { await envoyer({ op: "ajouter", liste: "brulages", element: { date: aujourdhui(), poele: "salon", marque: marqueParDefaut(), sacs: 1, note: "" } }); d.close(); toast("✓ Sac déclaré"); window.dispatchEvent(new Event("reservoir")); }
+          catch (err) { toast(err.message); ev.target.disabled = false; }
+        });
+      });
+    } else toast(`✓ Réservoir rempli${e ? ` (${e.depuisSac}/${e.parSac} pour ce sac)` : ""}`);
+  } catch (err) { toast(err.message); }
+}
+
 /* ---------- Statistiques avancées ---------- */
 /** Sacs par degré-jour (DJU), pour prévoir à froid égal : saison en cours, sinon la précédente */
 function sacsParDju() {
@@ -378,6 +442,7 @@ function vueTableau() {
       <button class="gtuile orange" data-gdetail="brules">${ic("🔥", "orange")}<span class="gtit">Brûlés${etat.poele !== "tous" ? ` · ${esc(courtPoele(etat.poele))}` : ""}</span><div><b>${nb(somme(brul))}</b> <small>sacs</small></div></button>
       <button class="gtuile cyan" data-gdetail="depenses">${ic("💶", "cyan")}<span class="gtit">Dépenses totales</span><div><b>${euros(somme(achats, prixAchat))}</b></div></button>
       <button class="gtuile ambre" data-gdetail="moyenne">${ic("📈", "ambre")}<span class="gtit">Moyenne ${libMoy}</span><div><b>${nb(moy.kg)}</b> <small>kg/j</small></div></button>`;
+  if (etat.poele !== "cuisine") h += htmlReservoir("g");
   if (avecChauffe()) {
     const m7 = minutesChauffe(ajouterJours(aujourdhui(), -6), aujourdhui()), mj = minutesChauffe(aujourdhui(), aujourdhui());
     h += `<button class="gtuile ambre large" data-gdetail="chauffe">${ic("🔥", "ambre")}<span class="gtit">Temps de chauffe · Salon</span>
@@ -1133,6 +1198,7 @@ function feuilleReglages() {
       <div id="gVilles"></div></div>
     <div class="bloc"><h3>📦 Stockage</h3><div class="two">
       ${champ("Capacité (sacs)", `<input type="number" name="capacite" min="1" value="${r.capacite}">`)}${champ("Poids d'un sac (kg)", `<input type="number" name="kgSac" min="1" step="0.5" value="${r.kgSac}">`)}</div>
+      ${champ("Réservoir du poêle salon (en sac)", `<select name="reservoir">${[[0.25, "¼ de sac"], [0.333, "⅓ de sac"], [0.5, "½ sac"], [1, "1 sac"]].map(([v, l]) => `<option value="${v}" ${Math.abs((Number(r.reservoir) || 0.5) - v) < .01 ? "selected" : ""}>${l}</option>`).join("")}</select>`)}
       <div class="two">${champ("Jauge rouge sous (%)", `<input type="number" name="seuilRouge" min="0" max="100" value="${r.seuilRouge}">`)}${champ("Jauge orange sous (%)", `<input type="number" name="seuilOrange" min="0" max="100" value="${r.seuilOrange}">`)}</div></div>
     <div class="bloc"><h3>🏷️ Marques et stock initial</h3>
       <p class="hint">Stock initial : les sacs que tu avais avant de commencer à noter les achats.</p>
@@ -1163,7 +1229,7 @@ function feuilleReglages() {
       f.querySelectorAll('input[name^="init:"]').forEach(i => { if (Number(i.value)) stockInitial[i.name.slice(5)] = Number(i.value); });
       const ms = marques(); if (f.nouvelle.value.trim() && !ms.includes(f.nouvelle.value.trim())) ms.push(f.nouvelle.value.trim());
       const reglages = { saisonDebut: n("saisonDebut"), saisonFin: n("saisonFin"), capacite: n("capacite") || 90, kgSac: n("kgSac") || 15,
-        seuilRouge: n("seuilRouge"), seuilOrange: n("seuilOrange"), marques: ms, stockInitial, ville: villeChoisie,
+        seuilRouge: n("seuilRouge"), seuilOrange: n("seuilOrange"), marques: ms, stockInitial, ville: villeChoisie, reservoir: n("reservoir") || 0.5,
         frequences: { regulier: n("regulier") || 7, vitre: n("vitre") || 2 } };
       const b = f.querySelector(".gvalider"); b.disabled = true;
       try { await envoyer({ op: "reglages", reglages }); d.close(); toast("✓ Réglages enregistrés"); chargerMeteo().then(rendre); }
@@ -1201,11 +1267,12 @@ async function envoyer(corps) {
 }
 async function charger() {
   try {
-    const [g, c] = await Promise.all([
+    const [g, c, rv] = await Promise.all([
       gh(`/contents/granules.json?t=${Date.now()}`, { raw: true }).then(JSON.parse).catch(e => { if (e.notFound) return null; throw e; }),
       gh(`/contents/chauffes.json?ref=etat&t=${Date.now()}`, { raw: true }).then(JSON.parse).catch(() => null),
+      gh(`/contents/reservoir.json?ref=etat&t=${Date.now()}`, { raw: true }).then(JSON.parse).catch(() => null),
     ]);
-    D = completer(g); chauffes = c; rendre();
+    D = completer(g); chauffes = c; reservoir = rv; rendre(); window.dispatchEvent(new Event("reservoir"));
     chargerMeteo().then(() => rendre());
   } catch (e) { $("vueGranules").innerHTML = `<section class="gcarte"><div class="sub err">${esc(e.message)}</div></section>`; }
 }
@@ -1235,6 +1302,7 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gmarqueprix) { etat.marquePrix = ds.gmarqueprix; return rendreBloc("prix"); }
   if (ds.gdetail) return detail(ds.gdetail);
   if (ds.gagrandir) return ouvrirGrand();
+  if (ds.gremplir) return remplirReservoir();
   if (t.id === "gPlus") return basculerRadial(!radial.classList.contains("ouvert"));
   if (t.id === "gReglages") return feuilleReglages();
   if (ds.gcase) {
@@ -1283,7 +1351,7 @@ function vue(v) {
   const z = $("vueGranules");
   if (etat.sens) { z.classList.remove("gentre-gauche", "gentre-droite"); void z.offsetWidth; z.classList.add(`gentre-${etat.sens}`); etat.sens = null; }
 }
-window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D };
+window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D, htmlReservoir, remplirReservoir };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token && !$("vueGranules").hidden && !ecriture) charger(); });
-if (cfg.token && !$("vueGranules").hidden) { rendre(); charger(); }
+if (cfg.token) { if (!$("vueGranules").hidden) rendre(); charger(); }   // chargé dès le départ : la jauge du réservoir s'affiche aussi sur l'écran Poêle
 })();
