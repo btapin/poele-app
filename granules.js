@@ -25,7 +25,7 @@ const etat = {
   poele: store.get("g.poele") || "tous",
   portee: store.get("g.portee") || "saison",
   graphe: store.get("g.graphe") || "7j", moyenne: "7j", filtreHisto: "tous", saisonStats: null, ouverts: new Set(),
-  entPoele: "salon", meteoGraphe: store.get("g.meteoGraphe") !== "non", statSaison: "brules", statMois: "sacs",
+  entPoele: "salon", heatMode: store.get("g.heat") || "sacs", meteoGraphe: store.get("g.meteoGraphe") !== "non", statSaison: "brules", statMois: "sacs",
 };
 
 /* ---------- Outils ---------- */
@@ -584,27 +584,37 @@ function vueStats() {
       <p class="sub gpetit">* saison en cours, jusqu'à aujourd'hui. DJU (degrés-jours) : mesure du froid ; « sacs/100 DJU » compare la consommation à froid égal.</p>`
     : `<div class="sub">Météo indisponible pour l'instant.</div>`}</section>`;
 
-  // 4. Intensité hebdomadaire
+  // 4. Intensité hebdomadaire : sacs brûlés ou temps de chauffe (switch)
   const tranches = [[1, 7], [8, 14], [15, 21], [22, 31]];
+  const modeChauffe = etat.heatMode === "chauffe" && avecChauffe();
+  const dj = debutJournal();
   const cases = mois.map(({ a, m }) => tranches.map(([d1, d2]) => {
     const fin = Math.min(d2, new Date(a, m, 0).getDate());
-    const l = brS.filter(b => { const d = date(b.date); return d.getFullYear() === a && d.getMonth() + 1 === m && d.getDate() >= d1 && d.getDate() <= fin; });
-    return { a, m, d1, fin, sacs: somme(l), l };
+    const deb = `${a}-${pad(m)}-${pad(d1)}`, finIso = `${a}-${pad(m)}-${pad(fin)}`;
+    const l = brS.filter(b => b.date >= deb && b.date <= finIso);
+    const mc = avecChauffe() && finIso >= dj ? minutesChauffe(deb, finIso) : null;
+    return { a, m, d1, fin, deb, finIso, sacs: somme(l), l, mc, val: modeChauffe ? (mc || 0) : somme(l) };
   }));
-  const maxCase = Math.max(1, ...cases.flat().map(c => c.sacs));
-  const RAMPE = ["#ffd98a", "#ffb04d", "#f57a22", "#d9481a", "#a32616"];
-  const couleurCase = s => RAMPE[Math.min(4, Math.max(0, Math.ceil(s / maxCase * 5) - 1))];
-  infos.cases = cases.map(col => col.map(c => `<b>Du ${c.d1} au ${c.fin} ${MOIS_LONG[c.m - 1].toLowerCase()} ${c.a}</b> : ${sacsTxt(c.sacs)} · ${nb(c.sacs * R().kgSac, 0)} kg${tempMoyenne(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`) !== null ? ` · ${temp(tempMoyenne(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`))}` : ""}`
-    + (avecChauffe() && `${c.a}-${pad(c.m)}-${pad(c.fin)}` >= debutJournal() ? ` · ⏱️ ${duree(minutesChauffe(`${c.a}-${pad(c.m)}-${pad(c.d1)}`, `${c.a}-${pad(c.m)}-${pad(c.fin)}`))} de chauffe` : "")
-    + (c.l.length ? "<br>" + c.l.map(b => `${dateCourte(b.date)} · ${esc(courtPoele(b.poele))} · ${esc(b.marque)} : ${nb(b.sacs)}`).join("<br>") : "")));
-  h += `<section class="gcarte"><div class="gtete">${ic("📊", "orange")}<div><b>Intensité de consommation</b><div class="gpetit">Suivi hebdomadaire de la saison</div></div>
+  const maxCase = Math.max(1, ...cases.flat().map(c => c.val));
+  const RAMPE = modeChauffe ? ["#c9f2d9", "#8fdcaf", "#4cc287", "#24955f", "#11643c"] : ["#ffd98a", "#ffb04d", "#f57a22", "#d9481a", "#a32616"];
+  const texteClair = modeChauffe ? "#0f2a1c" : "#3a1a08";
+  const couleurCase = v => RAMPE[Math.min(4, Math.max(0, Math.ceil(v / maxCase * 5) - 1))];
+  infos.cases = cases.map(col => col.map(c => {
+    const t = tempMoyenne(c.deb, c.finIso);
+    return `<b>Du ${c.d1} au ${c.fin} ${MOIS_LONG[c.m - 1].toLowerCase()} ${c.a}</b> : ${sacsTxt(c.sacs)} · ${nb(c.sacs * R().kgSac, 0)} kg${t !== null ? ` · ${temp(t)}` : ""}`
+      + (c.mc !== null ? ` · ⏱️ ${duree(c.mc)} de chauffe${c.sacs && c.mc ? ` (${nb(c.mc / 60 / c.sacs)} h par sac)` : ""}` : "")
+      + (c.l.length ? "<br>" + c.l.map(b => `${dateCourte(b.date)} · ${esc(courtPoele(b.poele))} · ${esc(b.marque)} : ${nb(b.sacs)}`).join("<br>") : "");
+  }));
+  h += `<section class="gcarte"><div class="gtete">${ic(modeChauffe ? "⏱️" : "📊", modeChauffe ? "vert" : "orange")}<div><b>Intensité ${modeChauffe ? "de chauffe" : "de consommation"}</b><div class="gpetit">${modeChauffe ? "Heures de chauffe du salon, par semaine" : "Sacs brûlés, par semaine"}</div></div>
     <div class="gechelle">Moins<i style="background:var(--gcase)"></i>${RAMPE.map(c => `<i style="background:${c}"></i>`).join("")}Plus</div></div>
+    ${avecChauffe() ? `<div class="gseg petit" style="margin:12px 0 0">${[["sacs", "🔥 Sacs brûlés"], ["chauffe", "⏱️ Temps de chauffe"]].map(([id, l]) => `<button data-gheat="${id}" class="${(modeChauffe ? "chauffe" : "sacs") === id ? "sel" + (id === "chauffe" ? " vert" : "") : ""}">${l}</button>`).join("")}</div>` : ""}
     <div class="gheat" style="grid-template-columns:repeat(${mois.length},1fr)">
     ${mois.map(({ a, m }) => `<div class="gh-t">${MOIS_COURT[m - 1]} '${String(a).slice(2)}</div>`).join("")}
     ${tranches.map((_, ti) => cases.map((col, mi) => {
-      const c = col[ti], coul = c.sacs ? couleurCase(c.sacs) : null, clair = coul && RAMPE.indexOf(coul) < 2;
-      return `<button class="gh-c${c.sacs ? " plein" : ""}" data-gcase="${mi}-${ti}" style="${coul ? `background:${coul};color:${clair ? "#3a1a08" : "#fff"}` : ""}">${c.d1}-${c.fin}</button>`;
-    }).join("")).join("")}</div><div class="ginfo" id="info-cases"></div></section>`;
+      const c = col[ti], coul = c.val ? couleurCase(c.val) : null, clair = coul && RAMPE.indexOf(coul) < 2;
+      return `<button class="gh-c${c.val ? " plein" : ""}" data-gcase="${mi}-${ti}" style="${coul ? `background:${coul};color:${clair ? texteClair : "#fff"}` : ""}">${c.d1}-${c.fin}</button>`;
+    }).join("")).join("")}</div><div class="ginfo" id="info-cases"></div>
+    ${modeChauffe ? `<div class="gpetit gcentre" style="margin-top:8px">Temps de chauffe mesuré depuis le ${dateLongue(dj)}.</div>` : ""}</section>`;
 
   // 5. Fin du stock
   if (sel === sc) {
@@ -1117,6 +1127,7 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gstatmois) { etat.statMois = ds.gstatmois; return rendre(); }
   if (ds.gstatsaison) { etat.statSaison = ds.gstatsaison; return rendre(); }
   if (ds.gmeteo) { etat.meteoGraphe = !etat.meteoGraphe; store.set("g.meteoGraphe", etat.meteoGraphe ? "oui" : "non"); return rendre(); }
+  if (ds.gheat) { etat.heatMode = ds.gheat; store.set("g.heat", ds.gheat); return rendre(); }
   if (ds.gmarqueprix) { etat.marquePrix = ds.gmarqueprix; return rendre(); }
   if (ds.gdetail) return detail(ds.gdetail);
   if (ds.gagrandir) return ouvrirGrand();
