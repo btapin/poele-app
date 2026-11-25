@@ -166,6 +166,17 @@
   .gres-cuve span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
   .gres-txt { flex: 1; min-width: 0; } .gres-txt b { display: block; font-size: 15px; } .gres-txt small { display: block; font-size: 12.5px; color: var(--muted); }
   .gres.g .gres-txt small { color: #8f97b3; }
+  .gres { padding: 9px 10px !important; gap: 10px !important; }
+  .gres-cuve { width: 30px !important; height: 42px !important; border-radius: 6px 6px 9px 9px !important; }
+  .gres-cuve span { font-size: 10.5px !important; }
+  button.gres-txt { border: 0; background: none; color: inherit; font: inherit; text-align: left; padding: 0; }
+  .gres-txt b { font-size: 14px !important; padding-right: 0 !important; }
+  .gres-plus { color: #6fd3a8; font-weight: 700; }
+  .gres-txt { min-width: 0; }
+  .gres-actions { align-self: center !important; gap: 6px; }
+  .gres .gres-maj { position: static; width: 34px; height: 34px; }
+  .gres-btn { padding: 9px 11px !important; font-size: 13.5px !important; }
+  .gres-coupe { margin-top: 6px !important; padding: 8px 10px !important; font-size: 12.5px !important; }
   .gres-lien { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: #6fd3a8; font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; }
   .gres-src { opacity: .75; font-size: 11.5px !important; margin-top: 2px; }
   .gres-actions { display: flex; align-items: center; gap: 6px; flex: none; }
@@ -731,7 +742,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 19h45</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 19h55</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -1497,6 +1508,7 @@ $("jaugeRes").addEventListener("click", e => {
   if (e.target.closest("[data-gremplir]")) granules.remplirReservoir();
   if (e.target.closest("[data-gresmaj]")) granules.actualiserReservoir();
   if (e.target.closest("[data-gresoubli]")) granules.feuilleRemplissages();
+  if (e.target.closest("[data-gresdetail]")) granules.detailReservoir();
 });
 setInterval(majJaugeRes, 60000);
 const heureParisNow = () => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());

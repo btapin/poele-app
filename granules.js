@@ -265,24 +265,41 @@ function etatReservoir() {
 function couleurReservoir(reste) {
   return reste === null ? "#5d6178" : reste > .5 ? "#3fd29a" : reste > .25 ? "#f2d14b" : reste > .1 ? "#f0932b" : "#e04848";
 }
-/** Jauge du réservoir (utilisée dans Granulés et sur l'écran Poêle) */
+/** Jauge du réservoir (utilisée dans Granulés et sur l'écran Poêle) : version compacte, détail au toucher */
 function htmlReservoir(theme = "g") {
   const e = etatReservoir(); if (!e) return "";
   const pct = e.reste === null ? null : Math.round(e.reste * 100), coul = e.depasse ? "#8a8fa8" : couleurReservoir(e.reste);
-  const quand = e.dernier ? new Date(e.dernier.le) : null;
-  const lib = quand ? `${quand.toDateString() === new Date().toDateString() ? "aujourd'hui" : quand.toLocaleDateString("fr-FR", { weekday: "long" })} à ${quand.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}` : "";
   const restant = e.autonomie !== null && e.heures !== null ? Math.max(0, e.autonomie - e.heures) : null;
+  const resume = e.autonomie === null ? "Autonomie en cours d'apprentissage"
+    : e.depasse ? `Dépassé de ${duree(Math.round(e.depasse * 60))}`
+    : restant !== null ? `${duree(Math.round(restant * 60))} restantes` : "Jamais rempli";
   return `<div class="gres ${theme}">
     <div class="gres-cuve"><i style="height:${e.depasse ? 8 : pct ?? 0}%;background:${coul}"></i><span>${pct === null || e.depasse ? "?" : pct + "%"}</span></div>
-    <div class="gres-txt"><b>Réservoir du salon${Number(R().coupureReservoir) ? ` <span class="gres-seuil">coupure à ${Number(R().coupureReservoir)} %</span>` : ""}</b>
-      <small>${e.dernier ? `Rempli ${lib}${e.dernier.qui ? ` par ${esc(e.dernier.qui)}` : ""}` : "Jamais rempli dans l'appli"}</small>
-      <small>${e.autonomie === null ? "Autonomie apprise après deux sacs déclarés au salon"
-        : e.depasse ? `Estimation dépassée de ${duree(Math.round(e.depasse * 60))} : il reste des granulés. Touche « Rempli » au prochain remplissage, l'estimation s'ajustera.`
-        : restant !== null ? `≈ ${duree(Math.round(restant * 60))} de chauffe restante · ${nb(e.heures)} h / ${nb(e.autonomie)} h` : ""}</small>
-      <button class="gres-lien" data-gresoubli="1">✎ Rempli plus tôt ? Corriger les remplissages</button>
-      <small class="gres-src">${e.source ? `Moyenne : ${nb(rendementSalon().parSac)} h de chauffe par sac (${nb(rendementSalon().heures, 0)} h pour ${sacsTxt(e.nbObs)} depuis le ${dateCourte(rendementSalon().depuis)})${e.nbObs < 4 ? " · encore peu de données" : ""}` : ""}</small></div>
-    <div class="gres-actions"><button class="gres-btn" data-gremplir="1">🪣 Rempli</button><button class="gres-maj" data-gresmaj="1" aria-label="Actualiser la jauge">↻</button></div></div>
-    ${reservoir && reservoir.coupe ? `<div class="gres-coupe">⛔ Poêle éteint car le réservoir était presque vide. Remplis-le puis touche « Rempli » pour que le mode automatique reprenne.</div>` : ""}`;
+    <button class="gres-txt" data-gresdetail="1"><b>Réservoir${Number(R().coupureReservoir) ? ` <span class="gres-seuil">${Number(R().coupureReservoir)} %</span>` : ""}</b>
+      <small>${resume} <span class="gres-plus">ⓘ</span></small></button>
+    <div class="gres-actions"><button class="gres-maj" data-gresmaj="1" aria-label="Actualiser la jauge">↻</button><button class="gres-btn" data-gremplir="1">🪣 Rempli</button></div></div>
+    ${reservoir && reservoir.coupe ? `<div class="gres-coupe">⛔ Poêle éteint : réservoir presque vide. Remplis-le puis touche « Rempli ».</div>` : ""}`;
+}
+function detailReservoir() {
+  const e = etatReservoir(); if (!e) return;
+  const rs = rendementSalon(), ligne = (a, b) => `<div class="gdl"><span>${a}</span><span>${b}</span></div>`;
+  const quand = e.dernier ? new Date(e.dernier.le) : null;
+  const lib = quand ? `${quand.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })} à ${quand.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}` : "--";
+  const restant = e.autonomie !== null && e.heures !== null ? Math.max(0, e.autonomie - e.heures) : null;
+  ouvrirFeuille(`<div class="gmodtete">${ic("🪣", "vert grand")}<h2>Réservoir du salon</h2></div>
+    <div class="gbloc">${ligne("Dernier remplissage", `<b>${lib}</b>`)}${e.dernier && e.dernier.qui ? ligne("Par", esc(e.dernier.qui)) : ""}
+      ${ligne("Chauffe depuis", e.heures !== null ? duree(Math.round(e.heures * 60)) : "--")}
+      ${ligne("Autonomie estimée", e.autonomie !== null ? duree(Math.round(e.autonomie * 60)) : "--")}
+      ${ligne(e.depasse ? "Dépassement" : "Reste", e.depasse ? duree(Math.round(e.depasse * 60)) : restant !== null ? `<b>≈ ${duree(Math.round(restant * 60))}</b>` : "--")}
+      ${ligne("Remplissages pour ce sac", `${e.depuisSac} / ${e.parSac}`)}</div>
+    <div class="gbloc"><div class="gtit">Calcul</div>
+      <div class="sub">${rs.parSac ? `${nb(rs.heures, 0)} h de chauffe pour ${sacsTxt(rs.sacs)} brûlés au salon depuis le ${dateCourte(rs.depuis)}, soit <b>${nb(rs.parSac)} h par sac</b>. Le réservoir tient ${e.capa === 0.5 ? "½" : nb(e.capa, 2)} sac, donc environ ${duree(Math.round(e.autonomie * 60))}.` : "Il faut au moins un sac déclaré au salon depuis le début du journal des chauffes."}
+      ${rs.sacs && rs.sacs < 4 ? "<br>Encore peu de données : l'estimation s'affinera avec les prochains sacs." : ""}</div></div>
+    ${Number(R().coupureReservoir) ? `<div class="gbloc"><div class="sub">⛔ Le poêle s'éteint si le réservoir passe sous <b>${Number(R().coupureReservoir)} %</b> (à partir de 4 sacs de données). Réglable dans ⚙︎.</div></div>` : ""}
+    <button type="button" class="gbouton" style="background:linear-gradient(135deg,#2bc48a,#1d9468)" data-oubli>✎ Rempli plus tôt ? Corriger les remplissages</button>
+    <div class="gpied"><button type="button" class="glien vert" data-gfermer>Fermer</button></div>`, d => {
+    d.querySelector("[data-oubli]").addEventListener("click", () => feuilleRemplissages());
+  }, "centre");
 }
 /* Remplissage oublié : choisir la date et l'heure, ou supprimer un remplissage noté par erreur */
 function feuilleRemplissages() {
@@ -1363,6 +1380,7 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gremplir) return remplirReservoir();
   if (ds.gresmaj) return actualiserReservoir();
   if (ds.gresoubli) return feuilleRemplissages();
+  if (ds.gresdetail) return detailReservoir();
   if (t.id === "gPlus") return basculerRadial(!radial.classList.contains("ouvert"));
   if (t.id === "gReglages") return feuilleReglages();
   if (ds.gcase) {
@@ -1411,7 +1429,7 @@ function vue(v) {
   const z = $("vueGranules");
   if (etat.sens) { z.classList.remove("gentre-gauche", "gentre-droite"); void z.offsetWidth; z.classList.add(`gentre-${etat.sens}`); etat.sens = null; }
 }
-window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D, htmlReservoir, remplirReservoir, actualiserReservoir, feuilleRemplissages };
+window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D, htmlReservoir, remplirReservoir, actualiserReservoir, feuilleRemplissages, detailReservoir };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token && !$("vueGranules").hidden && !ecriture) charger(); });
 if (cfg.token) { if (!$("vueGranules").hidden) rendre(); charger(); }   // chargé dès le départ : la jauge du réservoir s'affiche aussi sur l'écran Poêle
 })();
