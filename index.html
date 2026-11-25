@@ -166,6 +166,16 @@
   .gres-cuve span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
   .gres-txt { flex: 1; min-width: 0; } .gres-txt b { display: block; font-size: 15px; } .gres-txt small { display: block; font-size: 12.5px; color: var(--muted); }
   .gres.g .gres-txt small { color: #8f97b3; }
+  .gres-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+  .gres { position: relative; }
+  .gres-txt b { padding-right: 34px; }
+  .gres-actions { align-self: flex-end; }
+  .gres-maj { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; font-size: 14px !important; padding: 0;
+    border-radius: 10px; border: 1px solid rgba(140,150,190,.25); background: rgba(255,255,255,.06); color: inherit; }
+  .gres-maj-ancien { width: 38px; height: 38px; border-radius: 12px; border: 1px solid rgba(140,150,190,.25); background: rgba(255,255,255,.06); color: inherit; font-size: 17px; }
+  .gres-maj.tourne { animation: spin .8s linear infinite; }
+  .gres-seuil { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: rgba(224,72,72,.18); color: #ff8a8a; vertical-align: 2px; }
+  .gres-coupe { grid-column: 1 / -1; margin-top: 8px; padding: 10px 12px; border-radius: 12px; font-size: 13px; background: rgba(224,72,72,.14); border: 1px solid rgba(224,72,72,.45); color: #ffb3b3; }
   .gres-btn { flex: none; padding: 10px 12px; border-radius: 12px; border: 0; font: inherit; font-weight: 700; font-size: 14px; color: #fff; background: linear-gradient(135deg, #2bc48a, #1d9468); }
   .option-auto { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
   .ligne-switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; font-size: 14.5px; }
@@ -719,7 +729,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 18h50</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 19h00</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -1481,7 +1491,10 @@ let minuterie = {};
 /* Jauge du réservoir du salon sur l'écran Poêle (calculée par le module Granulés) */
 function majJaugeRes() { if (window.granules && granules.estCharge()) $("jaugeRes").innerHTML = granules.htmlReservoir("p"); }
 window.addEventListener("reservoir", majJaugeRes);
-$("jaugeRes").addEventListener("click", e => { if (e.target.closest("[data-gremplir]")) granules.remplirReservoir(); });
+$("jaugeRes").addEventListener("click", e => {
+  if (e.target.closest("[data-gremplir]")) granules.remplirReservoir();
+  if (e.target.closest("[data-gresmaj]")) granules.actualiserReservoir();
+});
 setInterval(majJaugeRes, 60000);
 const heureParisNow = () => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
 const hhmm = d => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
