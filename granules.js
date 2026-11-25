@@ -221,6 +221,14 @@ function ressenti(t) {
 
 /* ---------- Réservoir du salon ---------- */
 /** Minutes de chauffe depuis un instant (ms) */
+function minutesEntre2(debut, fin) {
+  if (!chauffes) return 0;
+  let m = 0;
+  const seg = (d, f) => { const a = Math.max(d, debut), b = Math.min(f, fin); if (b > a) m += (b - a) / 60000; };
+  for (const c of chauffes.liste || []) seg(Date.parse(c.debut), Date.parse(c.fin));
+  if (chauffes.enCours) seg(Date.parse(chauffes.enCours.debut), Date.now());
+  return Math.round(m);
+}
 function minutesDepuis(ms) {
   if (!chauffes) return 0;
   let m = 0;
@@ -237,13 +245,21 @@ function etatReservoir() {
   const pleins = ((reservoir && reservoir.recharges) || []).map(x => ({ le: x.le, qui: x.qui, type: "rempli" }))
     .concat(sacsSalon.map(b => ({ le: b.cree, qui: b.qui, type: "sac" }))).sort((a, b) => a.le < b.le ? 1 : -1);
   const dernier = pleins[0];
+  // Autonomie : d'abord ce qui a été observé entre deux « Rempli » consécutifs (médiane des 6 derniers),
+  // sinon l'estimation à partir des sacs déclarés. S'ajuste donc à chaque remplissage.
+  const tr = ((reservoir && reservoir.recharges) || []).map(x => Date.parse(x.le)).filter(Number.isFinite).sort((a, b) => a - b);
+  const obs = [];
+  for (let i = 1; i < tr.length; i++) { const h = minutesEntre2(tr[i - 1], tr[i]) / 60; if (h >= 0.3) obs.push(h); }
+  const der = obs.slice(-6).sort((a, b) => a - b);
   const hps = rendementSalon().parSac;
-  const autonomie = hps ? hps * capa : null;
+  const autonomie = der.length >= 2 ? der[Math.floor(der.length / 2)] : hps ? hps * capa : null;
+  const source = der.length >= 2 ? "remplissages" : hps ? "sacs" : null, nbObs = der.length;
   const heures = dernier ? minutesDepuis(Date.parse(dernier.le)) / 60 : null;
   const dernierSac = sacsSalon.map(b => b.cree).sort().pop() || "";
   const depuisSac = ((reservoir && reservoir.recharges) || []).filter(x => x.le > dernierSac).length;
   const reste = autonomie !== null && heures !== null ? Math.max(0, 1 - heures / autonomie) : null;
-  return { capa, dernier, heures, autonomie, reste, depuisSac, parSac: Math.round(1 / capa) };
+  const depasse = autonomie !== null && heures !== null && heures > autonomie ? heures - autonomie : 0;
+  return { capa, dernier, heures, autonomie, reste, depasse, source, nbObs, depuisSac, parSac: Math.round(1 / capa) };
 }
 function couleurReservoir(reste) {
   return reste === null ? "#5d6178" : reste > .5 ? "#3fd29a" : reste > .25 ? "#f2d14b" : reste > .1 ? "#f0932b" : "#e04848";
@@ -251,15 +267,18 @@ function couleurReservoir(reste) {
 /** Jauge du réservoir (utilisée dans Granulés et sur l'écran Poêle) */
 function htmlReservoir(theme = "g") {
   const e = etatReservoir(); if (!e) return "";
-  const pct = e.reste === null ? null : Math.round(e.reste * 100), coul = couleurReservoir(e.reste);
+  const pct = e.reste === null ? null : Math.round(e.reste * 100), coul = e.depasse ? "#8a8fa8" : couleurReservoir(e.reste);
   const quand = e.dernier ? new Date(e.dernier.le) : null;
   const lib = quand ? `${quand.toDateString() === new Date().toDateString() ? "aujourd'hui" : quand.toLocaleDateString("fr-FR", { weekday: "long" })} à ${quand.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}` : "";
   const restant = e.autonomie !== null && e.heures !== null ? Math.max(0, e.autonomie - e.heures) : null;
   return `<div class="gres ${theme}">
-    <div class="gres-cuve"><i style="height:${pct ?? 0}%;background:${coul}"></i><span>${pct === null ? "?" : pct + "%"}</span></div>
+    <div class="gres-cuve"><i style="height:${e.depasse ? 8 : pct ?? 0}%;background:${coul}"></i><span>${pct === null || e.depasse ? "?" : pct + "%"}</span></div>
     <div class="gres-txt"><b>Réservoir du salon${Number(R().coupureReservoir) ? ` <span class="gres-seuil">coupure à ${Number(R().coupureReservoir)} %</span>` : ""}</b>
       <small>${e.dernier ? `Rempli ${lib}${e.dernier.qui ? ` par ${esc(e.dernier.qui)}` : ""}` : "Jamais rempli dans l'appli"}</small>
-      <small>${e.autonomie === null ? "Autonomie apprise après deux sacs déclarés au salon" : restant !== null ? `≈ ${duree(Math.round(restant * 60))} de chauffe restante · ${nb(e.heures)} h / ${nb(e.autonomie)} h` : ""}</small></div>
+      <small>${e.autonomie === null ? "Autonomie apprise après deux sacs déclarés au salon"
+        : e.depasse ? `Estimation dépassée de ${duree(Math.round(e.depasse * 60))} : il reste des granulés. Touche « Rempli » au prochain remplissage, l'estimation s'ajustera.`
+        : restant !== null ? `≈ ${duree(Math.round(restant * 60))} de chauffe restante · ${nb(e.heures)} h / ${nb(e.autonomie)} h` : ""}</small>
+      <small class="gres-src">${e.source === "remplissages" ? `Autonomie mesurée sur tes ${e.nbObs} derniers remplissages` : e.source === "sacs" ? "Autonomie estimée d'après les sacs déclarés (approximatif) · s'affine après 2 « Rempli »" : ""}</small></div>
     <div class="gres-actions"><button class="gres-btn" data-gremplir="1">🪣 Rempli</button><button class="gres-maj" data-gresmaj="1" aria-label="Actualiser la jauge">↻</button></div></div>
     ${reservoir && reservoir.coupe ? `<div class="gres-coupe">⛔ Poêle éteint car le réservoir était presque vide. Remplis-le puis touche « Rempli » pour que le mode automatique reprenne.</div>` : ""}`;
 }
