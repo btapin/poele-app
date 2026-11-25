@@ -157,6 +157,10 @@
   .picker.g .pk-grille button.sel { background: linear-gradient(135deg, #5a82ff, #3d5bdc); color: #fff; }
   .pk-grille button:disabled { opacity: .25; }
   .minfin.err { color: var(--bad); }
+  .option-auto { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .ligne-switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; font-size: 14.5px; }
+  .option-auto .grid2[hidden], #absHint[hidden] { display: none; }
+  .option-auto .grid2 { margin-top: 4px; }
   .minuterie { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 14px;
     background: rgba(255,179,71,.1); border: 1px solid rgba(255,179,71,.35); }
   .minuterie[hidden] { display: none; }
@@ -465,6 +469,11 @@
   .gradial.ouvert .gr-btn.entretien { transform: translate(96px, -14px); transition-delay: .08s; }
   .gfab { transition: transform .3s; }
   .gfab.ouvert { transform: translateX(-50%) rotate(45deg) !important; z-index: 26; background: linear-gradient(135deg, #3b3f55, #2a2d40); box-shadow: none; }
+  .gprev { background: radial-gradient(120% 120% at 100% 0%, rgba(143,127,214,.25), transparent 60%), linear-gradient(160deg, #1f1d3c, #151a2c); }
+  .gjours { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 12px; align-items: end; text-align: center; }
+  .gjours > div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .gjours i { display: block; width: 14px; border-radius: 4px; background: linear-gradient(180deg, #a08cf0, #6a4fd6); }
+  .gjours b { font-size: 13px; } .gjours small { font-size: 11px; color: var(--gmuet); }
   .gfab { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 15;
     width: 58px; height: 58px; border-radius: 50%; border: 0; font-size: 28px; font-weight: 600; color: #fff;
     background: linear-gradient(135deg, #5a82ff, #3d5bdc); box-shadow: 0 10px 26px rgba(61,91,220,.5); }
@@ -607,6 +616,23 @@
         <label class="f">De<input type="time" id="debut" value="06:30"></label>
         <label class="f">À<input type="time" id="fin" value="22:00"></label>
       </div>
+      <div class="option-auto">
+        <div class="ligne-switch"><span>📅 Horaires différents le week-end</span><label class="switch"><input type="checkbox" id="weOn"><span class="slider"></span></label></div>
+        <div class="grid2" id="weChamps" hidden>
+          <label class="f">Sam. et dim. de<input type="time" id="debutWE" value="08:00"></label>
+          <label class="f">À<input type="time" id="finWE" value="23:00"></label>
+        </div>
+      </div>
+      <div class="option-auto">
+        <div class="ligne-switch"><span>🧳 Mode absence (hors-gel)</span><label class="switch"><input type="checkbox" id="absOn"><span class="slider"></span></label></div>
+        <div class="grid2" id="absChamps" hidden>
+          <label class="f">Jusqu'au (inclus)<input type="date" id="absFin"></label>
+          <label class="f">Garder au moins
+            <div class="stepper"><button data-t="hg" data-d="-0.5">−</button><output id="vhg">12</output><button data-t="hg" data-d="0.5">+</button></div>
+          </label>
+        </div>
+        <p class="hint" id="absHint" hidden>Pendant l'absence, la plage horaire est ignorée : le poêle ne s'allume que si la pièce passe sous ce minimum, et s'éteint 2 °C au-dessus.</p>
+      </div>
       <div class="ligne-actions" id="actionsAuto">
         <button class="save annuler" id="btnCancelAuto">Annuler</button>
         <button class="save" id="btnSave">Enregistrer les réglages</button>
@@ -648,6 +674,10 @@
       <label>🔥 Allumage et extinction <span class="switch"><input type="checkbox" id="nMarche" checked><span class="slider"></span></span></label>
       <label>⚠️ Alarmes et poêle injoignable <span class="switch"><input type="checkbox" id="nAlarmes" checked><span class="slider"></span></span></label>
       <label>⚙️ Changements de réglages <span class="switch"><input type="checkbox" id="nReglages" checked><span class="slider"></span></span></label>
+      <label>🪣 Réservoir du salon bientôt vide <span class="switch"><input type="checkbox" id="nReservoir" checked><span class="slider"></span></span></label>
+      <label>🧹 Rappels d'entretien (18 h) <span class="switch"><input type="checkbox" id="nEntretien" checked><span class="slider"></span></span></label>
+      <label>📦 Stock de granulés bas <span class="switch"><input type="checkbox" id="nStock" checked><span class="slider"></span></span></label>
+      <label>📊 Bilan mensuel (le 1er à 9 h) <span class="switch"><input type="checkbox" id="nBilan" checked><span class="slider"></span></span></label>
       <label>🌡️ Alerte température <span class="switch"><input type="checkbox" id="nTemp"><span class="slider"></span></span></label>
     </div>
     <div class="two" id="tempSeuils" hidden>
@@ -678,7 +708,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 16h25</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 19h30</div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -712,7 +742,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const WF = "poele.yml";
-const DEFAUTS = { TEMP_MIN: "18", TEMP_MAX: "20", HEURE_DEBUT: "06:30", HEURE_FIN: "22:00" };
+const DEFAUTS = { TEMP_MIN: "18", TEMP_MAX: "20", HEURE_DEBUT: "06:30", HEURE_FIN: "22:00",
+  HEURE_DEBUT_WE: "-", HEURE_FIN_WE: "-", ABSENCE_FIN: "-", HORS_GEL: "12" };
 
 /* ---------- Stockage local (protégé) ---------- */
 const store = {
@@ -867,6 +898,7 @@ const pushPossible = () => "serviceWorker" in navigator && "PushManager" in wind
 function prefsNotif() {
   const t = $("nTemp").checked, v = id => { const n = parseFloat(String($(id).value).replace(",", ".")); return Number.isFinite(n) ? n : null; };
   return { marche: $("nMarche").checked, alarmes: $("nAlarmes").checked, reglages: $("nReglages").checked,
+    reservoir: $("nReservoir").checked, entretien: $("nEntretien").checked, stock: $("nStock").checked, bilan: $("nBilan").checked,
     tempBasse: t ? v("nTempBas") : null, tempHaute: t ? v("nTempHaut") : null };
 }
 /** Prévient les autres téléphones d'un changement de réglage (sans bloquer l'appli si le relais ne répond pas) */
@@ -888,6 +920,7 @@ async function majNotif() {
     $("btnNotif").disabled = true; $("btnNotifTest").disabled = true; return;
   }
   try { const p = JSON.parse(store.get("poele.notifprefs") || "{}"); $("nMarche").checked = p.marche !== false; $("nAlarmes").checked = p.alarmes !== false; $("nReglages").checked = p.reglages !== false;
+    $("nReservoir").checked = p.reservoir !== false; $("nEntretien").checked = p.entretien !== false; $("nStock").checked = p.stock !== false; $("nBilan").checked = p.bilan !== false;
     $("nTemp").checked = p.tempBasse != null || p.tempHaute != null;
     if (p.tempBasse != null) $("nTempBas").value = p.tempBasse; if (p.tempHaute != null) $("nTempHaut").value = p.tempHaute;
     $("tempSeuils").hidden = !$("nTemp").checked; } catch {}
@@ -924,7 +957,7 @@ $("btnNotif").addEventListener("click", async () => {
   majNotif();
 });
 $("nTemp").addEventListener("change", () => { $("tempSeuils").hidden = !$("nTemp").checked; });
-["nMarche", "nAlarmes", "nReglages", "nTemp", "nTempBas", "nTempHaut"].forEach(id => $(id).addEventListener("change", async () => {
+["nMarche", "nAlarmes", "nReglages", "nReservoir", "nEntretien", "nStock", "nBilan", "nTemp", "nTempBas", "nTempHaut"].forEach(id => $(id).addEventListener("change", async () => {
   const p = prefsNotif();
   if ($("nTemp").checked && (p.tempBasse === null || p.tempHaute === null || p.tempBasse >= p.tempHaute)) return toast("Le seuil bas doit être inférieur au seuil haut");
   store.set("poele.notifprefs", JSON.stringify(p));
@@ -1051,9 +1084,33 @@ $("btnApplyPoele").addEventListener("click", () => {
 /* ---------- Mode auto & réglages ---------- */
 const vals = { min: 18, max: 20 };
 let initial = {};
-function majSteppers() { $("vmin").textContent = fmt(vals.min); $("vmax").textContent = fmt(vals.max); verifierModif(); }
+function majSteppers() { $("vmin").textContent = fmt(vals.min); $("vmax").textContent = fmt(vals.max); $("vhg").textContent = fmt(vals.hg ?? 12); verifierModif(); }
 function courant() {
-  return { TEMP_MIN: String(vals.min), TEMP_MAX: String(vals.max), HEURE_DEBUT: $("debut").value, HEURE_FIN: $("fin").value };
+  const we = $("weOn").checked, abs = $("absOn").checked;
+  return { TEMP_MIN: String(vals.min), TEMP_MAX: String(vals.max), HEURE_DEBUT: $("debut").value, HEURE_FIN: $("fin").value,
+    HEURE_DEBUT_WE: we ? $("debutWE").value : "-", HEURE_FIN_WE: we ? $("finWE").value : "-",
+    ABSENCE_FIN: abs && $("absFin").value ? $("absFin").value : "-", HORS_GEL: String(vals.hg ?? 12) };
+}
+function majOptionsAuto() {
+  $("weChamps").hidden = !$("weOn").checked;
+  $("absChamps").hidden = $("absHint").hidden = !$("absOn").checked;
+  verifierModif();
+}
+["weOn", "absOn"].forEach(id => $(id).addEventListener("change", () => {
+  if (id === "absOn" && $("absOn").checked && !$("absFin").value) {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    $("absFin").value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  majOptionsAuto();
+}));
+const heureOk = h => /^\d\d:\d\d$/.test(h || "");
+function appliquerOptionsAuto(r) {
+  $("weOn").checked = heureOk(r.HEURE_DEBUT_WE) && heureOk(r.HEURE_FIN_WE);
+  if ($("weOn").checked) { $("debutWE").value = r.HEURE_DEBUT_WE; $("finWE").value = r.HEURE_FIN_WE; }
+  const abs = /^\d{4}-\d\d-\d\d$/.test(r.ABSENCE_FIN || "") && r.ABSENCE_FIN >= new Date().toISOString().slice(0, 10);
+  $("absOn").checked = abs; $("absFin").value = abs ? r.ABSENCE_FIN : "";
+  vals.hg = parseFloat(String(r.HORS_GEL || "12").replace(",", ".")) || 12;
+  majOptionsAuto();
 }
 function verifierModif() {
   const c = courant();
@@ -1064,15 +1121,17 @@ function verifierModif() {
 }
 document.querySelectorAll(".stepper button[data-d]").forEach(b => b.addEventListener("click", ev => {
   ev.preventDefault();
-  const t = b.dataset.t; vals[t] = Math.round((vals[t] + parseFloat(b.dataset.d)) * 2) / 2;
-  if (vals.min >= vals.max) { if (t === "min") vals.max = vals.min + 0.5; else vals.min = vals.max - 0.5; }
+  const t = b.dataset.t; vals[t] = Math.round(((vals[t] ?? 12) + parseFloat(b.dataset.d)) * 2) / 2;
+  if (t === "hg") vals.hg = Math.min(18, Math.max(5, vals.hg));
+  else if (vals.min >= vals.max) { if (t === "min") vals.max = vals.min + 0.5; else vals.min = vals.max - 0.5; }
   majSteppers();
 }));
-["debut", "fin"].forEach(id => $(id).addEventListener("input", verifierModif));
+["debut", "fin", "debutWE", "finWE", "absFin"].forEach(id => $(id).addEventListener("input", verifierModif));
 $("btnCancelAuto").addEventListener("click", () => {
   vals.min = parseFloat(String(initial.TEMP_MIN).replace(",", "."));
   vals.max = parseFloat(String(initial.TEMP_MAX).replace(",", "."));
   $("debut").value = initial.HEURE_DEBUT; $("fin").value = initial.HEURE_FIN;
+  appliquerOptionsAuto(initial);
   majSteppers();
 });
 
@@ -1084,20 +1143,27 @@ async function chargerReglages() {
   initial = lus;
   vals.min = parseFloat(lus.TEMP_MIN.replace(",", ".")); vals.max = parseFloat(lus.TEMP_MAX.replace(",", "."));
   $("debut").value = lus.HEURE_DEBUT; $("fin").value = lus.HEURE_FIN;
+  appliquerOptionsAuto(lus);
+  // une absence terminée compte comme « pas d'absence » (évite un faux « modifié »)
+  if (!$("absOn").checked) initial.ABSENCE_FIN = "-";
   majSteppers();
 }
 
 async function enregistrerReglages() {
   const c = courant();
   if (!c.HEURE_DEBUT || !c.HEURE_FIN || c.HEURE_DEBUT >= c.HEURE_FIN) return toast("L'heure de début doit être avant l'heure de fin");
+  if (c.HEURE_DEBUT_WE !== "-" && c.HEURE_DEBUT_WE >= c.HEURE_FIN_WE) return toast("Week-end : l'heure de début doit être avant l'heure de fin");
   $("btnSave").disabled = true;
   try {
-    const LIB = { TEMP_MIN: ["Allumer sous", " °C"], TEMP_MAX: ["Éteindre au-dessus de", " °C"], HEURE_DEBUT: ["Début", ""], HEURE_FIN: ["Fin", ""] };
+    const LIB = { TEMP_MIN: ["Allumer sous", " °C"], TEMP_MAX: ["Éteindre au-dessus de", " °C"], HEURE_DEBUT: ["Début", ""], HEURE_FIN: ["Fin", ""],
+      HEURE_DEBUT_WE: ["Début le week-end", ""], HEURE_FIN_WE: ["Fin le week-end", ""], ABSENCE_FIN: ["Absence jusqu'au", ""], HORS_GEL: ["Hors-gel", " °C"] };
+    const lib = (k, v) => v === "-" ? (k === "ABSENCE_FIN" ? "aucune" : "comme la semaine") : k === "ABSENCE_FIN" ? new Date(v + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : fmt(v);
     const changes = [];
     for (const [k, v] of Object.entries(c)) {
       if (v === initial[k]) continue;
       await ecrireVariable(k, v);
-      changes.push(`${LIB[k][0]} ${fmt(initial[k])} → ${fmt(v)}${LIB[k][1]}`);
+      if (k === "ABSENCE_FIN") changes.push(v === "-" ? "Mode absence désactivé" : `Mode absence jusqu'au ${lib(k, v)}`);
+      else changes.push(`${LIB[k][0]} ${lib(k, initial[k])} → ${lib(k, v)}${v === "-" ? "" : LIB[k][1]}`);
     }
     initial = c; verifierModif(); toast("✓ Réglages enregistrés");
     if (changes.length) annoncer(`Mode automatique : ${changes.join(" · ")}`);
@@ -1380,7 +1446,7 @@ function ameliorerChamp(input, opts = {}) {
   const maj = () => {
     const v = proto.get.call(input);
     bouton.classList.toggle("vide", !v);
-    bouton.innerHTML = `<span>${v ? (type === "date" ? new Date(v + "T12:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : v.replace(":", "h")) : (opts.vide || "Choisir")}</span><span class="ico">${type === "date" ? "📅" : "🕒"}</span>`;
+    bouton.innerHTML = `<span>${v ? (type === "date" ? new Date(v + "T12:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : v.replace(":", "h")) : (opts.vide || "Choisir")}</span><span class="ico">${type === "date" ? "📅" : "🕒"}</span>`;
   };
   Object.defineProperty(input, "value", { get() { return proto.get.call(this); }, set(v) { proto.set.call(this, v); maj(); }, configurable: true });
   maj();
@@ -1395,15 +1461,25 @@ function ameliorerChamp(input, opts = {}) {
 window.ameliorerChamp = ameliorerChamp;
 ameliorerChamp($("debut"), { titre: "Début de la plage automatique", pas: 5 });
 ameliorerChamp($("fin"), { titre: "Fin de la plage automatique", pas: 5 });
+ameliorerChamp($("debutWE"), { titre: "Début le samedi et le dimanche", pas: 5 });
+ameliorerChamp($("finWE"), { titre: "Fin le samedi et le dimanche", pas: 5 });
+ameliorerChamp($("absFin"), { titre: "Absent jusqu'au (inclus)", vide: "Choisir une date" });
 
 /* ---------- Minuterie : allumage en dehors de la plage du mode automatique ---------- */
 let minuterie = {};
 const heureParisNow = () => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
 const hhmm = d => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
 const dureeLib = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? " " + String(m % 60).padStart(2, "0") : ""}`;
+function plageAujourdhui() {
+  const r = initial.HEURE_DEBUT ? initial : DEFAUTS;
+  const j = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "short" }).format(new Date());
+  const we = /^(sam|dim)/i.test(j) && heureOk(r.HEURE_DEBUT_WE) && heureOk(r.HEURE_FIN_WE);
+  return we ? { debut: r.HEURE_DEBUT_WE, fin: r.HEURE_FIN_WE } : { debut: r.HEURE_DEBUT, fin: r.HEURE_FIN };
+}
+const absenceEnCours = () => { const r = initial.HEURE_DEBUT ? initial : DEFAUTS; return /^\d{4}-\d\d-\d\d$/.test(r.ABSENCE_FIN || "") && r.ABSENCE_FIN >= new Date().toISOString().slice(0, 10); };
 function horsPlage() {
-  const r = initial.HEURE_DEBUT ? initial : DEFAUTS, h = heureParisNow();
-  return h < r.HEURE_DEBUT || h >= r.HEURE_FIN;
+  const p = plageAujourdhui(), h = heureParisNow();
+  return absenceEnCours() || h < p.debut || h >= p.fin;
 }
 function afficherMinuterie(m) {
   minuterie = m || {};
@@ -1442,11 +1518,12 @@ function majMinConsigne() {
 $("minCMoins").addEventListener("click", () => { if (minConsigne !== null) { minConsigne = Math.max(7, minConsigne - 0.5); majMinConsigne(); majMinFin(); } });
 $("minCPlus").addEventListener("click", () => { if (minConsigne !== null) { minConsigne = Math.min(40, minConsigne + 0.5); majMinConsigne(); majMinFin(); } });
 function ouvrirMinuterie() {
-  const r = initial.HEURE_DEBUT ? initial : DEFAUTS, autoOff = !$("auto").checked;
+  const r = plageAujourdhui(), autoOff = !$("auto").checked;
   $("minTitre").textContent = autoOff ? "🔥 Allumer (mode auto désactivé)" : "🔥 Allumer hors de la plage";
   $("minIntro").textContent = autoOff
     ? "Le mode automatique est désactivé : personne n'éteindrait le poêle. Choisis combien de temps le laisser allumé."
-    : `Il est ${heureParisNow().replace(":", "h")}, en dehors de la plage automatique (${r.HEURE_DEBUT.replace(":", "h")} – ${r.HEURE_FIN.replace(":", "h")}). Personne ne l'éteindrait : choisis combien de temps le laisser allumé.`;
+    : absenceEnCours() ? "Le mode absence est actif : seul le hors-gel est surveillé. Choisis combien de temps laisser le poêle allumé."
+    : `Il est ${heureParisNow().replace(":", "h")}, en dehors de la plage automatique (${r.debut.replace(":", "h")} – ${r.fin.replace(":", "h")}). Personne ne l'éteindrait : choisis combien de temps le laisser allumé.`;
   consigneActuelle = dernierEtat && dernierEtat.consigne !== null && dernierEtat.consigne !== undefined ? Number(dernierEtat.consigne) : null;
   minConsigne = consigneActuelle; majMinConsigne();
   $("minDurees").innerHTML = [30, 60, 90, 120, 150, 180].map(m => `<button type="button" data-m="${m}">${dureeLib(m)}</button>`).join("");

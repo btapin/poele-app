@@ -186,15 +186,18 @@ async function chargerMeteo() {
     const [arch, prev] = await Promise.all([
       (cache && cache.cle === cle && cache.jour === auj ? Promise.resolve(null)
         : fetch(`https://archive-api.open-meteo.com/v1/archive?${base}&start_date=${debut}&end_date=${auj}`).then(r => r.ok ? r.json() : null).catch(() => null)),
-      fetch(`https://api.open-meteo.com/v1/forecast?${base}&past_days=14&forecast_days=1&current=temperature_2m`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`https://api.open-meteo.com/v1/forecast?${base}&past_days=14&forecast_days=8&current=temperature_2m`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
-    const jours = { ...((cache && cache.cle === cle && cache.jours) || {}) };
+    const jours = { ...((cache && cache.cle === cle && cache.jours) || {}) }, prevision = {};
+    for (const k of Object.keys(jours)) if (k > auj) delete jours[k];            // anciennes prévisions : jamais dans l'historique
     for (const src of [arch, prev]) {
       if (!src || !src.daily) continue;
-      src.daily.time.forEach((t, i) => { const x = src.daily.temperature_2m_mean[i]; if (x !== null && x !== undefined) jours[t] = Math.round(x * 10) / 10; });
+      src.daily.time.forEach((t, i) => { const x = src.daily.temperature_2m_mean[i]; if (x === null || x === undefined) return;
+        if (t > auj) prevision[t] = Math.round(x * 10) / 10; else jours[t] = Math.round(x * 10) / 10; });
     }
     if (!Object.keys(jours).length) return;
-    meteo = { cle, jour: auj, le: Date.now(), jours, actuelle: prev && prev.current ? prev.current.temperature_2m : (cache && cache.actuelle) };
+    meteo = { cle, jour: auj, le: Date.now(), jours, prevision: Object.keys(prevision).length ? prevision : ((cache && cache.prevision) || {}),
+      actuelle: prev && prev.current ? prev.current.temperature_2m : (cache && cache.actuelle) };
     try { store.set("g.meteo", JSON.stringify(meteo)); } catch {}
   } catch {}
 }
@@ -214,6 +217,42 @@ const tempMois = (a, m) => tempMoyenne(`${a}-${pad(m)}-01`, `${a}-${pad(m)}-${pa
 function ressenti(t) {
   if (t === null || t === undefined) return "";
   return t < 0 ? "Glacial" : t < 5 ? "Très froid" : t < 10 ? "Froid" : t < 15 ? "Frais" : t < 20 ? "Doux" : "Chaud";
+}
+
+/* ---------- Statistiques avancées ---------- */
+/** Sacs par degré-jour (DJU), pour prévoir à froid égal : saison en cours, sinon la précédente */
+function sacsParDju() {
+  const essai = a => {
+    const l = D.brulages.filter(b => anneeSaison(b.date) === a && dePoele(b));
+    if (somme(l) < 2) return null;
+    const deb = l[0].date, fin = a === saisonCourante() ? aujourdhui() : l[l.length - 1].date, dj = dju(deb, fin);
+    return dj ? { ratio: somme(l) / dj, saison: a } : null;
+  };
+  return essai(saisonCourante()) || essai(saisonCourante() - 1);
+}
+function prevision7j() {
+  if (!meteo || !meteo.prevision) return null;
+  const jours = Object.keys(meteo.prevision).sort().slice(0, 7);
+  const s = sacsParDju();
+  if (!jours.length || !s) return null;
+  const lignes = jours.map(j => { const t = meteo.prevision[j], dj = Math.max(0, BASE_DJU - t); return { j, t, sacs: dj * s.ratio }; });
+  return { lignes, sacs: lignes.reduce((x, l) => x + l.sacs, 0), tMoy: lignes.reduce((x, l) => x + l.t, 0) / lignes.length, base: s };
+}
+/** Chauffes du journal (terminées), avec la date locale de début */
+const chauffesListe = () => ((chauffes && chauffes.liste) || []).map(c => ({ ...c, jour: iso(new Date(c.debut)) }));
+function projectionSaison() {
+  const sc = saisonCourante(), auj = aujourdhui(), couts = coutsBrulages();
+  const l = D.brulages.filter(b => anneeSaison(b.date) === sc && dePoele(b));
+  if (!l.length) return null;
+  const depense = coutDe(l, couts), sacs = somme(l), finS = finSaison(sc);
+  if (auj >= finS) return { depense, sacs, totalEuros: depense, totalSacs: sacs, methode: "terminee" };
+  const djFait = dju(l[0].date, auj), djReste = dju(ajouterJours(auj, -364), ajouterJours(finS, -365));
+  if (djFait && djReste !== null) {
+    const k = djReste / djFait;
+    return { depense, sacs, totalEuros: depense * (1 + k), totalSacs: sacs * (1 + k), methode: "meteo", djReste };
+  }
+  const jFait = Math.max(7, ecartJours(l[0].date, auj) + 1), jReste = ecartJours(auj, finS);
+  return { depense, sacs, totalEuros: depense / jFait * (jFait + jReste), totalSacs: sacs / jFait * (jFait + jReste), methode: "lineaire" };
 }
 
 /* ---------- Graphiques (SVG faits main, sans double axe) ---------- */
@@ -395,6 +434,17 @@ function vueTableau() {
       <span class="gbadge orange">${sacsTxt(totalGraphe)}</span></div>
       ${barres(cols, { cle: "tab", cles: clesPoeles(), etiquettes: !["30j", "mois"].includes(etat.graphe) })}${legende(legendePoeles())}
       ${avecChauffe() ? panneauHeures(periodes, { cle: "tabh", etiquettes: !["30j", "mois"].includes(etat.graphe) }) : ""}</section>`;
+  const pv = prevision7j();
+  if (pv) {
+    const t7 = tempMoyenne(ajouterJours(auj, -6), auj), pm = prixMoyenGlobal();
+    const maxS = Math.max(.01, ...pv.lignes.map(l => l.sacs));
+    h += `<section class="gcarte gprev"><div class="gtete">${ic("🔮", "violet")}<div><b>Les 7 prochains jours</b>
+      <div class="gpetit">Prévisions à ${esc(ville().nom)}${t7 !== null ? ` · ${pv.tMoy < t7 - .5 ? "plus froid" : pv.tMoy > t7 + .5 ? "plus doux" : "comme"} que les 7 derniers jours` : ""}</div></div></div>
+      <div class="gligne2" style="margin-top:12px"><div><b class="gbig" style="font-size:30px">≈ ${nb(pv.sacs)}</b> <small class="gpetit">sacs${etat.poele !== "tous" ? ` · ${esc(courtPoele(etat.poele))}` : ""}</small></div>
+      <div class="adroite">${pm ? `<b>≈ ${euros(pv.sacs * pm)}</b><div class="gpetit">au prix moyen</div>` : ""}</div></div>
+      <div class="gjours">${pv.lignes.map(l => `<div><span class="gpetit">${JOURS[date(l.j).getDay()].replace(".", "")}</span><i style="height:${Math.max(4, l.sacs / maxS * 46)}px"></i><b>${nb(l.t, 0)}°</b><small>${nb(l.sacs)}</small></div>`).join("")}</div>
+      <div class="gpetit" style="margin-top:6px">Estimation à froid égal : ${nb(pv.base.ratio * 100)} sacs pour 100 degrés-jours (saison ${nomSaison(pv.base.saison)}).</div></section>`;
+  }
   return h;
 }
 function infoJour(j, l) {
@@ -635,6 +685,49 @@ function vueStats() {
       <div class="gmini accent"><span>Autonomie</span><b>${jours ?? "--"} jours</b><small>${jours !== null ? `Fin : ${dateLongue(ajouterJours(auj, jours))}` : ""}</small></div>
       <div class="gmini"><span>Conso moyenne</span><b>${nb(conso, 2)} sac/j</b><small>${nb(conso * R().kgSac)} kg/j</small></div></div>
       ${jours !== null ? projection(stock, conso, jours) : ""}</section>`;
+  }
+
+  // 5 bis. Projection de la saison
+  if (sel === sc) {
+    const pj = projectionSaison();
+    if (pj) h += `<section class="gcarte"><div class="gtete">${ic("💶", "cyan")}<div><b>Projection de la saison</b><div class="gpetit">${pj.methode === "meteo" ? `Selon le froid de l'an dernier sur le reste de la saison` : pj.methode === "lineaire" ? "Au rythme actuel (météo indisponible)" : "Saison terminée"}</div></div></div>
+      <div class="gtuiles trois"><div class="gmini"><span>Déjà brûlé</span><b>${euros(pj.depense)}</b><small>${sacsTxt(pj.sacs)}</small></div>
+      <div class="gmini accent"><span>Fin de saison</span><b>≈ ${euros(Math.round(pj.totalEuros))}</b><small>≈ ${sacsTxt(Math.round(pj.totalSacs))}</small></div>
+      <div class="gmini"><span>Reste</span><b>≈ ${euros(Math.max(0, Math.round(pj.totalEuros - pj.depense)))}</b><small>≈ ${sacsTxt(Math.max(0, Math.round(pj.totalSacs - pj.sacs)))}</small></div></div>
+      <div class="gpetit">Recalculé chaque jour${etat.poele !== "tous" ? ` · poêle ${esc(courtPoele(etat.poele).toLowerCase())} uniquement` : ""}.</div></section>`;
+  }
+
+  // 5 ter. Allumages et vitesse de chauffe (journal du salon)
+  if (avecChauffe()) {
+    const ch = chauffesListe(), dj = debutJournal(), auj2 = aujourdhui();
+    const jours14 = [...Array(14).keys()].map(k => ajouterJours(auj2, k - 13)).filter(j => j >= dj);
+    const nbJour = j => ch.filter(c => c.jour === j).length + (chauffes.enCours && iso(new Date(chauffes.enCours.debut)) === j ? 1 : 0);
+    const nbJours = Math.max(1, ecartJours(dj, auj2) + 1), total = ch.length + (chauffes.enCours ? 1 : 0);
+    const dureeMoy = ch.length ? somme(ch, c => c.minutes) / ch.length : null;
+    infos.allum = jours14.map(j => { const l = ch.filter(c => c.jour === j); return `<b>${JOURS[date(j).getDay()].replace(".", "")} ${dateLongue(j)}</b> : ${nbJour(j)} allumage${nbJour(j) > 1 ? "s" : ""}${l.length ? ` · ${duree(somme(l, c => c.minutes))} de chauffe` : ""}${meteo && meteo.jours[j] !== undefined ? ` · ${temp(meteo.jours[j])}` : ""}`; });
+    h += `<section class="gcarte"><div class="gtete">${ic("🔁", "ambre")}<div><b>Allumages du poêle salon</b><div class="gpetit">Chaque allumage consomme un surplus de granulés et use la bougie d'allumage</div></div></div>
+      <div class="gtuiles trois"><div class="gmini"><span>Par jour</span><b>${nb(total / nbJours)}</b><small>en moyenne</small></div>
+      <div class="gmini"><span>Durée moyenne</span><b>${dureeMoy !== null ? duree(Math.round(dureeMoy)) : "--"}</b><small>par chauffe</small></div>
+      <div class="gmini"><span>Total</span><b>${total}</b><small>depuis le ${dateCourte(dj)}</small></div></div>
+      ${barres(jours14.map(j => ({ lab: dateCourte(j).slice(0, 2), valeurs: { n: nbJour(j) }, fort: j === auj2 })), { cle: "allum", cles: ["n"], couleurs: { n: "#f0932b" }, hauteur: 100 })}</section>`;
+
+    // vitesse de montée en température (cycles complets avec températures de début et de fin)
+    const cycles = ch.filter(c => typeof c.tempDebut === "number" && typeof c.tempFin === "number" && c.minutes >= 20 && c.tempFin > c.tempDebut);
+    if (cycles.length >= 3) {
+      const vit = c => (c.tempFin - c.tempDebut) / (c.minutes / 60);          // °C par heure
+      const ext = c => meteo && meteo.jours[c.jour] !== undefined ? meteo.jours[c.jour] : null;
+      const groupes = [["Dehors < 5 °C", c => ext(c) !== null && ext(c) < 5], ["5 à 10 °C", c => ext(c) !== null && ext(c) >= 5 && ext(c) < 10], ["≥ 10 °C", c => ext(c) !== null && ext(c) >= 10]];
+      const moy = l => l.length ? l.reduce((x, c) => x + vit(c), 0) / l.length : null;
+      const recents = cycles.filter(c => c.jour >= ajouterJours(auj2, -6)), anciens = cycles.filter(c => c.jour < ajouterJours(auj2, -6));
+      const vR = moy(recents), vA = moy(anciens), vT = moy(cycles);
+      const minPour = v => v ? Math.round(1.5 / v * 60) : null;
+      h += `<section class="gcarte"><div class="gtete">${ic("📈", "vert")}<div><b>Vitesse de chauffe du salon</b><div class="gpetit">Degrés gagnés par heure de chauffe (${cycles.length} chauffes)</div></div></div>
+        <div class="gtuiles trois"><div class="gmini"><span>En moyenne</span><b>+${nb(vT)} °C/h</b><small>${minPour(vT)} min pour +1,5 °C</small></div>
+        <div class="gmini"><span>7 derniers jours</span><b>${vR ? `+${nb(vR)} °C/h` : "--"}</b><small>${vR && vA ? (vR < vA * .85 ? "⚠️ plus lent" : vR > vA * 1.15 ? "plus rapide" : "stable") : ""}</small></div>
+        <div class="gmini"><span>Avant</span><b>${vA ? `+${nb(vA)} °C/h` : "--"}</b><small></small></div></div>
+        ${meteo ? groupes.map(([lib, f]) => { const l = cycles.filter(f), v = moy(l); return `<div class="gdl"><span>${lib}</span><span>${v ? `<b>+${nb(v)} °C/h</b> · ${minPour(v)} min pour +1,5 °C <small class="gpetit">(${l.length})</small>` : '<span class="gpetit">pas encore de données</span>'}</span></div>`; }).join("") : ""}
+        <div class="gpetit" style="margin-top:6px">Si la vitesse baisse nettement à température extérieure égale, le poêle s'encrasse peut-être (brasier, échangeur, vitre).</div></section>`;
+    }
   }
 
   // 6. Prix moyen par saison + évolution
