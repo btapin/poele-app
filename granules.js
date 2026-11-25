@@ -143,7 +143,12 @@ function rendementSalon() {
     const pm = parMarque[brul[i].marque] = parMarque[brul[i].marque] || { min: 0, sacs: 0 };
     pm.min += m; pm.sacs += brul[i].sacs; min += m; sacs += brul[i].sacs;
   }
-  return { parSac: sacs ? min / 60 / sacs : null, parMarque, depuis: debutJournal };
+  // Moyenne globale : toutes les heures de chauffe ÷ tous les sacs brûlés au salon depuis le début du journal.
+  // Les écarts du début et de la fin (granules restant dans le réservoir) se compensent avec le temps.
+  const sacsTot = somme(brul.filter(b => b.date >= debutJournal));
+  const minTot = liste.filter(c => c.debut.slice(0, 10) >= debutJournal).reduce((x, c) => x + (c.minutes || 0), 0)
+    + (chauffes.enCours ? Math.max(0, Math.round((Date.now() - Date.parse(chauffes.enCours.debut)) / 60000)) : 0);
+  return { parSac: sacsTot ? minTot / 60 / sacsTot : null, sacs: sacsTot, heures: minTot / 60, parMarque, depuis: debutJournal };
 }
 
 /* ---------- Temps de chauffe (poêle salon, journal chauffes.json) ---------- */
@@ -247,13 +252,9 @@ function etatReservoir() {
   const dernier = pleins[0];
   // Autonomie : d'abord ce qui a été observé entre deux « Rempli » consécutifs (médiane des 6 derniers),
   // sinon l'estimation à partir des sacs déclarés. S'ajuste donc à chaque remplissage.
-  const tr = ((reservoir && reservoir.recharges) || []).map(x => Date.parse(x.le)).filter(Number.isFinite).sort((a, b) => a - b);
-  const obs = [];
-  for (let i = 1; i < tr.length; i++) { const h = minutesEntre2(tr[i - 1], tr[i]) / 60; if (h >= 0.3) obs.push(h); }
-  const der = obs.slice(-6).sort((a, b) => a - b);
-  const hps = rendementSalon().parSac;
-  const autonomie = der.length >= 2 ? der[Math.floor(der.length / 2)] : hps ? hps * capa : null;
-  const source = der.length >= 2 ? "remplissages" : hps ? "sacs" : null, nbObs = der.length;
+  const rs = rendementSalon(), hps = rs.parSac;
+  const autonomie = hps ? hps * capa : null;
+  const source = hps ? "sacs" : null, nbObs = rs.sacs || 0;
   const heures = dernier ? minutesDepuis(Date.parse(dernier.le)) / 60 : null;
   const dernierSac = sacsSalon.map(b => b.cree).sort().pop() || "";
   const depuisSac = ((reservoir && reservoir.recharges) || []).filter(x => x.le > dernierSac).length;
@@ -278,7 +279,7 @@ function htmlReservoir(theme = "g") {
       <small>${e.autonomie === null ? "Autonomie apprise après deux sacs déclarés au salon"
         : e.depasse ? `Estimation dépassée de ${duree(Math.round(e.depasse * 60))} : il reste des granulés. Touche « Rempli » au prochain remplissage, l'estimation s'ajustera.`
         : restant !== null ? `≈ ${duree(Math.round(restant * 60))} de chauffe restante · ${nb(e.heures)} h / ${nb(e.autonomie)} h` : ""}</small>
-      <small class="gres-src">${e.source === "remplissages" ? `Autonomie mesurée sur tes ${e.nbObs} derniers remplissages` : e.source === "sacs" ? "Autonomie estimée d'après les sacs déclarés (approximatif) · s'affine après 2 « Rempli »" : ""}</small></div>
+      <small class="gres-src">${e.source ? `Moyenne : ${nb(rendementSalon().parSac)} h de chauffe par sac (${nb(rendementSalon().heures, 0)} h pour ${sacsTxt(e.nbObs)} depuis le ${dateCourte(rendementSalon().depuis)})${e.nbObs < 4 ? " · encore peu de données" : ""}` : ""}</small></div>
     <div class="gres-actions"><button class="gres-btn" data-gremplir="1">🪣 Rempli</button><button class="gres-maj" data-gresmaj="1" aria-label="Actualiser la jauge">↻</button></div></div>
     ${reservoir && reservoir.coupe ? `<div class="gres-coupe">⛔ Poêle éteint car le réservoir était presque vide. Remplis-le puis touche « Rempli » pour que le mode automatique reprenne.</div>` : ""}`;
 }
