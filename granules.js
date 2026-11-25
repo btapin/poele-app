@@ -279,9 +279,38 @@ function htmlReservoir(theme = "g") {
       <small>${e.autonomie === null ? "Autonomie apprise après deux sacs déclarés au salon"
         : e.depasse ? `Estimation dépassée de ${duree(Math.round(e.depasse * 60))} : il reste des granulés. Touche « Rempli » au prochain remplissage, l'estimation s'ajustera.`
         : restant !== null ? `≈ ${duree(Math.round(restant * 60))} de chauffe restante · ${nb(e.heures)} h / ${nb(e.autonomie)} h` : ""}</small>
+      <button class="gres-lien" data-gresoubli="1">✎ Rempli plus tôt ? Corriger les remplissages</button>
       <small class="gres-src">${e.source ? `Moyenne : ${nb(rendementSalon().parSac)} h de chauffe par sac (${nb(rendementSalon().heures, 0)} h pour ${sacsTxt(e.nbObs)} depuis le ${dateCourte(rendementSalon().depuis)})${e.nbObs < 4 ? " · encore peu de données" : ""}` : ""}</small></div>
     <div class="gres-actions"><button class="gres-btn" data-gremplir="1">🪣 Rempli</button><button class="gres-maj" data-gresmaj="1" aria-label="Actualiser la jauge">↻</button></div></div>
     ${reservoir && reservoir.coupe ? `<div class="gres-coupe">⛔ Poêle éteint car le réservoir était presque vide. Remplis-le puis touche « Rempli » pour que le mode automatique reprenne.</div>` : ""}`;
+}
+/* Remplissage oublié : choisir la date et l'heure, ou supprimer un remplissage noté par erreur */
+function feuilleRemplissages() {
+  const pad2 = n => String(n).padStart(2, "0"), d = new Date();
+  const liste = ((reservoir && reservoir.recharges) || []).slice(0, 8);
+  const lib = x => { const t = new Date(x.le); return `${t.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} à ${t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}`; };
+  ouvrirFeuille(`${tete("🪣", "Remplissage oublié")}
+    <p class="sub" style="font-size:14px">Indique quand tu as réellement rempli le réservoir (7 derniers jours au plus).</p>
+    <div class="two">${champ("Date", `<input type="date" name="jour" value="${iso(d)}">`)}${champ("Heure", `<input type="time" name="heure" value="${pad2(d.getHours())}:${pad2(Math.floor(d.getMinutes() / 5) * 5)}">`)}</div>
+    <button class="gvalider vert" type="submit">🪣 Noter ce remplissage</button>
+    ${liste.length ? `<div class="gtit" style="margin-top:18px">Derniers remplissages</div><div class="glist">${liste.map(x => `<div class="gitem vert"><span class="gic vert">🪣</span><div class="gitxt"><b>${lib(x)}</b><small>${x.qui ? esc(x.qui) : ""}${x.corrige ? " · noté après coup" : ""}</small></div><button type="button" class="gbtn-ic" data-suppr="${esc(x.le)}" aria-label="Supprimer">🗑</button></div>`).join("")}</div>` : ""}`, dlg => {
+    if (window.ameliorerChamp) ameliorerChamp(dlg.querySelector('input[name="heure"]'), { theme: "g", titre: "Heure du remplissage", pas: 5 });
+    const f = dlg.querySelector("form");
+    f.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const [h, m] = f.heure.value.split(":").map(Number), quand = date(f.jour.value); quand.setHours(h, m, 0, 0);
+      if (quand > new Date()) return toast("Ce moment est dans le futur");
+      if (Date.now() - quand > 7 * 864e5) return toast("7 jours maximum");
+      const b = f.querySelector(".gvalider"); b.disabled = true;
+      try { const j = await relais("/reservoir", { qui: cfg.qui || "", le: quand.toISOString() }); reservoir = j.reservoir; dlg.close(); rendre(); window.dispatchEvent(new Event("reservoir")); toast("✓ Remplissage noté"); }
+      catch (err) { toast(err.message); b.disabled = false; }
+    });
+    dlg.querySelectorAll("[data-suppr]").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { const j = await relais("/reservoir", { action: "supprimer", le: b.dataset.suppr }); reservoir = j.reservoir; rendre(); window.dispatchEvent(new Event("reservoir")); b.closest(".gitem").remove(); toast("✓ Remplissage supprimé"); }
+      catch (err) { toast(err.message); b.disabled = false; }
+    }));
+  });
 }
 let majRes = false;
 async function actualiserReservoir() {
@@ -1333,6 +1362,7 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gagrandir) return ouvrirGrand();
   if (ds.gremplir) return remplirReservoir();
   if (ds.gresmaj) return actualiserReservoir();
+  if (ds.gresoubli) return feuilleRemplissages();
   if (t.id === "gPlus") return basculerRadial(!radial.classList.contains("ouvert"));
   if (t.id === "gReglages") return feuilleReglages();
   if (ds.gcase) {
@@ -1381,7 +1411,7 @@ function vue(v) {
   const z = $("vueGranules");
   if (etat.sens) { z.classList.remove("gentre-gauche", "gentre-droite"); void z.offsetWidth; z.classList.add(`gentre-${etat.sens}`); etat.sens = null; }
 }
-window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D, htmlReservoir, remplirReservoir, actualiserReservoir };
+window.granules = { charger, rendre, vue, vueActive: () => etat.vue, estCharge: () => !!D, htmlReservoir, remplirReservoir, actualiserReservoir, feuilleRemplissages };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token && !$("vueGranules").hidden && !ecriture) charger(); });
 if (cfg.token) { if (!$("vueGranules").hidden) rendre(); charger(); }   // chargé dès le départ : la jauge du réservoir s'affiche aussi sur l'écran Poêle
 })();
