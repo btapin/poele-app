@@ -437,6 +437,8 @@
   .gbouton { width: 100%; margin-top: 12px; padding: 13px; border: 0; border-radius: 16px; color: #fff; font: inherit; font-weight: 600; font-size: 15px; }
   .gbouton.violet { background: linear-gradient(135deg, #8a6cf0, #6a4fd6); }
   .gsvg .ttemp { fill: #2bb3a3; }
+  @keyframes gFondu { from { opacity: .35; } to { opacity: 1; } }
+  .gfondu .gheat, .gfondu .gsvg, .gfondu .gtete, .gfondu .gleg { animation: gFondu .25s ease-out; }
   @keyframes gGauche { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
   @keyframes gDroite { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
   #vueGranules.gentre-gauche > :not(.gfab) { animation: gGauche .28s ease-out; }
@@ -676,7 +678,7 @@
 
   <div class="sub err" id="dlgErr"></div>
   <button class="save dirty" id="btnDlgSave" type="button">Enregistrer</button>
-  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 16h15</div>
+  <div class="sub" style="text-align:center;margin-top:10px;font-size:12px">Version de l'appli : 25/11 · 16h25</div>
 </dialog>
 
 <div class="toast" id="toast"></div>

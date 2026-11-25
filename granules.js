@@ -303,6 +303,17 @@ function rendre() {
   z.innerHTML = h;
 }
 
+/** Ne redessine qu'un bloc (le reste de l'écran ne bouge pas) */
+function rendreBloc(nom) {
+  const ancien = $("vueGranules").querySelector(`[data-bloc="${nom}"]`);
+  if (!ancien) return rendre();
+  const tmp = document.createElement("div");
+  tmp.innerHTML = { tableau: vueTableau, historique: vueHistorique, stats: vueStats, entretiens: vueEntretiens }[etat.vue]();
+  const neuf = tmp.querySelector(`[data-bloc="${nom}"]`);
+  if (!neuf) return rendre();
+  neuf.classList.add("gfondu");
+  ancien.replaceWith(neuf);
+}
 function vueTableau() {
   const stock = stockTotal(), cap = R().capacite || 90, pct = Math.max(0, Math.min(100, stock / cap * 100));
   const niveau = pct < R().seuilRouge ? "rouge" : pct < R().seuilOrange ? "orange" : "ok";
@@ -380,7 +391,7 @@ function vueTableau() {
     });
   }
   const totalGraphe = cols.reduce((x, c) => x + Object.values(c.valeurs).reduce((a, b) => a + b, 0), 0);
-  h += `<section class="gcarte orangee"><div class="gligne2">${ic("🔥", "orange")}<select class="gselect" id="gGraphe">${choix.map(([id, l]) => `<option value="${id}" ${etat.graphe === id ? "selected" : ""}>${l}</option>`).join("")}</select>
+  h += `<section class="gcarte orangee" data-bloc="graphe"><div class="gligne2">${ic("🔥", "orange")}<select class="gselect" id="gGraphe">${choix.map(([id, l]) => `<option value="${id}" ${etat.graphe === id ? "selected" : ""}>${l}</option>`).join("")}</select>
       <span class="gbadge orange">${sacsTxt(totalGraphe)}</span></div>
       ${barres(cols, { cle: "tab", cles: clesPoeles(), etiquettes: !["30j", "mois"].includes(etat.graphe) })}${legende(legendePoeles())}
       ${avecChauffe() ? panneauHeures(periodes, { cle: "tabh", etiquettes: !["30j", "mois"].includes(etat.graphe) }) : ""}</section>`;
@@ -542,7 +553,7 @@ function vueStats() {
       : { lab: MOIS_COURT[m - 1], valeurs: { e: Math.round(ce) }, fantome: Math.round(cp),
           info: `<b>${MOIS_LONG[m - 1]}</b><br>${nomSaison(sel)} : ${euros(ce)} de granulés brûlés${ce && `${a}-${pad(m)}-01` <= aujourdhui() ? ` · soit ${euros(ce / (finMois <= aujourdhui() ? new Date(a, m, 0).getDate() : jours))} / jour` : ""}<br>${nomSaison(prec)} : ${euros(cp)}` };
   });
-  h += `<section class="gcarte gagrandir">
+  h += `<section class="gcarte gagrandir" data-bloc="mois">
     <button class="gbtn-ic gplein" data-gagrandir="1" aria-label="Agrandir">⤢</button>
     <div class="gseg">${[["sacs", "🔥 Sacs brûlés"], ["euros", "€ Coût brûlé"]].map(([id, l]) => `<button data-gstatmois="${id}" class="${etat.statMois === id ? "sel" + (id === "euros" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
     ${legende([pastille(C_PASSE, nomSaison(prec)), ...(sacs ? (cles.length > 1 ? cles.map(k => pastille(COULEUR[k], `${nomSaison(sel)} · ${courtPoele(k)}`)) : [pastille(COULEUR[cles[0]], nomSaison(sel))]) : [pastille(C_EUROS, nomSaison(sel))]),
@@ -556,7 +567,7 @@ function vueStats() {
   // 2. Saisons
   const toutes = []; for (let a = saisonCourante() - 5; a <= saisonCourante(); a++) toutes.push(a);
   const brules = etat.statSaison === "brules";
-  h += `<section class="gcarte"><div class="gseg">${[["brules", "🔥 Sacs brûlés"], ["achetes", "🛍️ Sacs achetés"]].map(([id, l]) => `<button data-gstatsaison="${id}" class="${etat.statSaison === id ? "sel" + (id === "achetes" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
+  h += `<section class="gcarte" data-bloc="saisons"><div class="gseg">${[["brules", "🔥 Sacs brûlés"], ["achetes", "🛍️ Sacs achetés"]].map(([id, l]) => `<button data-gstatsaison="${id}" class="${etat.statSaison === id ? "sel" + (id === "achetes" ? " bleu" : "") : ""}">${l}</button>`).join("")}</div>
     ${barres(toutes.map(a => {
       const l = brules ? D.brulages.filter(b => anneeSaison(b.date) === a && dePoele(b)) : D.achats.filter(x => anneeSaison(x.date) === a);
       return { lab: nomSaison(a), valeurs: brules ? valeursPoeles(l) : { e: somme(l) }, fort: a === sel,
@@ -605,7 +616,7 @@ function vueStats() {
       + (c.mc !== null ? ` · ⏱️ ${duree(c.mc)} de chauffe${c.sacs && c.mc ? ` (${nb(c.mc / 60 / c.sacs)} h par sac)` : ""}` : "")
       + (c.l.length ? "<br>" + c.l.map(b => `${dateCourte(b.date)} · ${esc(courtPoele(b.poele))} · ${esc(b.marque)} : ${nb(b.sacs)}`).join("<br>") : "");
   }));
-  h += `<section class="gcarte"><div class="gtete">${ic(modeChauffe ? "⏱️" : "📊", modeChauffe ? "vert" : "orange")}<div><b>Intensité ${modeChauffe ? "de chauffe" : "de consommation"}</b><div class="gpetit">${modeChauffe ? "Heures de chauffe du salon, par semaine" : "Sacs brûlés, par semaine"}</div></div>
+  h += `<section class="gcarte" data-bloc="intensite"><div class="gtete">${ic(modeChauffe ? "⏱️" : "📊", modeChauffe ? "vert" : "orange")}<div><b>Intensité ${modeChauffe ? "de chauffe" : "de consommation"}</b><div class="gpetit">${modeChauffe ? "Heures de chauffe du salon, par semaine" : "Sacs brûlés, par semaine"}</div></div>
     <div class="gechelle">Moins<i style="background:var(--gcase)"></i>${RAMPE.map(c => `<i style="background:${c}"></i>`).join("")}Plus</div></div>
     ${avecChauffe() ? `<div class="gseg petit" style="margin:12px 0 0">${[["sacs", "🔥 Sacs brûlés"], ["chauffe", "⏱️ Temps de chauffe"]].map(([id, l]) => `<button data-gheat="${id}" class="${(modeChauffe ? "chauffe" : "sacs") === id ? "sel" + (id === "chauffe" ? " vert" : "") : ""}">${l}</button>`).join("")}</div>` : ""}
     <div class="gheat" style="grid-template-columns:repeat(${mois.length},1fr)">
@@ -631,7 +642,7 @@ function vueStats() {
     const ms = [...new Set(D.achats.map(a => a.marque))];
     const marquePrix = ms.includes(etat.marquePrix) ? etat.marquePrix : "tous";
     const ach = D.achats.filter(a => marquePrix === "tous" || a.marque === marquePrix);
-    h += `<section class="gcarte"><div class="gtete">${ic("🏷️", "bleu")}<div><b>Prix moyen du sac par saison</b></div></div>
+    h += `<section class="gcarte" data-bloc="prix"><div class="gtete">${ic("🏷️", "bleu")}<div><b>Prix moyen du sac par saison</b></div></div>
       <div class="gchips gcentre">${["tous", ...ms].map(m => `<button data-gmarqueprix="${esc(m)}" class="${marquePrix === m ? "sel bleu" : ""}">${m === "tous" ? "Tous" : esc(m)}</button>`).join("")}</div>
       ${barres(toutes.map(a => { const p = moyennePrix(ach.filter(x => anneeSaison(x.date) === a)); return { lab: nomSaison(a), valeurs: { e: p ? Math.round(p * 100) / 100 : 0 }, fort: a === sel, info: p ? `<b>${nomSaison(a)}</b> : ${euros(p)} / sac` : "" }; }),
         { cle: "prix", cles: ["e"], couleurs: { e: "#6f7cf0" }, unite: "€", hauteur: 110 })}
@@ -1108,7 +1119,7 @@ async function charger() {
 
 /* ---------- Événements ---------- */
 $("vueGranules").addEventListener("change", ev => {
-  if (ev.target.id === "gGraphe") { etat.graphe = ev.target.value; store.set("g.graphe", etat.graphe); rendre(); }
+  if (ev.target.id === "gGraphe") { etat.graphe = ev.target.value; store.set("g.graphe", etat.graphe); rendreBloc("graphe"); }
   if (ev.target.id === "gSaisonStats") { etat.saisonStats = Number(ev.target.value); rendre(); }
 });
 $("vueGranules").addEventListener("click", ev => {
@@ -1124,11 +1135,11 @@ $("vueGranules").addEventListener("click", ev => {
   if (ds.gportee) { etat.portee = ds.gportee; store.set("g.portee", ds.gportee); return rendre(); }
   if (ds.ghisto) { etat.filtreHisto = ds.ghisto; return rendre(); }
   if (ds.gentp) { etat.entPoele = ds.gentp; store.set("g.entPoele", ds.gentp); return rendre(); }
-  if (ds.gstatmois) { etat.statMois = ds.gstatmois; return rendre(); }
-  if (ds.gstatsaison) { etat.statSaison = ds.gstatsaison; return rendre(); }
-  if (ds.gmeteo) { etat.meteoGraphe = !etat.meteoGraphe; store.set("g.meteoGraphe", etat.meteoGraphe ? "oui" : "non"); return rendre(); }
-  if (ds.gheat) { etat.heatMode = ds.gheat; store.set("g.heat", ds.gheat); return rendre(); }
-  if (ds.gmarqueprix) { etat.marquePrix = ds.gmarqueprix; return rendre(); }
+  if (ds.gstatmois) { etat.statMois = ds.gstatmois; return rendreBloc("mois"); }
+  if (ds.gstatsaison) { etat.statSaison = ds.gstatsaison; return rendreBloc("saisons"); }
+  if (ds.gmeteo) { etat.meteoGraphe = !etat.meteoGraphe; store.set("g.meteoGraphe", etat.meteoGraphe ? "oui" : "non"); return rendreBloc("mois"); }
+  if (ds.gheat) { etat.heatMode = ds.gheat; store.set("g.heat", ds.gheat); return rendreBloc("intensite"); }
+  if (ds.gmarqueprix) { etat.marquePrix = ds.gmarqueprix; return rendreBloc("prix"); }
   if (ds.gdetail) return detail(ds.gdetail);
   if (ds.gagrandir) return ouvrirGrand();
   if (t.id === "gPlus") return basculerRadial(!radial.classList.contains("ouvert"));
