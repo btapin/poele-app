@@ -336,25 +336,40 @@ async function actualiserReservoir() {
   try { await charger(); toast("✓ Jauge actualisée"); }
   finally { majRes = false; setTimeout(() => document.querySelectorAll("[data-gresmaj]").forEach(b => b.classList.remove("tourne")), 300); }
 }
+let remplissageEnCours = false;
+/** « Rempli » instantané : la jauge et la question « Sac terminé ? » s'affichent tout de suite,
+    l'enregistrement part en arrière-plan ; en cas d'échec, tout est annulé avec un message. */
 async function remplirReservoir() {
   if (!cfg.relais) return toast("Nécessite le relais Cloudflare");
-  try {
-    const j = await relais("/reservoir", { qui: cfg.qui || "" });
-    reservoir = j.reservoir; rendre(); window.dispatchEvent(new Event("reservoir"));
-    const e = etatReservoir();
-    if (e && e.depuisSac >= e.parSac) {
-      ouvrirFeuille(`${tete("🔥", "Sac terminé ?")}
-        <p class="sub" style="font-size:15px">C'est le ${e.depuisSac}ᵉ remplissage depuis le dernier sac déclaré (un sac = ${e.parSac} remplissages). Déclarer un sac brûlé au salon ?</p>
-        <button class="gvalider orange" type="button" data-oui>🔥 Oui, 1 sac brûlé au salon</button>
-        <button class="save" type="button" data-gfermer>Pas encore</button>`, d => {
-        d.querySelector("[data-oui]").addEventListener("click", async ev => {
-          ev.target.disabled = true;
-          try { await envoyer({ op: "ajouter", liste: "brulages", element: { date: aujourdhui(), poele: "salon", marque: marqueParDefaut(), sacs: 1, note: "" } }); d.close(); toast("✓ Sac déclaré"); window.dispatchEvent(new Event("reservoir")); }
-          catch (err) { toast(err.message); ev.target.disabled = false; }
-        });
+  if (remplissageEnCours) return;
+  const avant = reservoir ? JSON.parse(JSON.stringify(reservoir)) : null;
+  const liste = (reservoir && reservoir.recharges) || [];
+  if (liste[0] && Date.now() - Date.parse(liste[0].le) < 3 * 60000) return toast("Remplissage déjà noté il y a moins de 3 min");
+  remplissageEnCours = true;
+  reservoir = { ...(reservoir || {}), recharges: [{ le: new Date().toISOString(), qui: cfg.qui || "" }, ...liste] };
+  delete reservoir.coupe;
+  rendre(); window.dispatchEvent(new Event("reservoir"));
+  const e = etatReservoir();
+  if (e && e.depuisSac >= e.parSac) {
+    ouvrirFeuille(`${tete("🔥", "Sac terminé ?")}
+      <p class="sub" style="font-size:15px">C'est le ${e.depuisSac}ᵉ remplissage depuis le dernier sac déclaré (un sac = ${e.parSac} remplissages). Déclarer un sac brûlé au salon ?</p>
+      <button class="gvalider orange" type="button" data-oui>🔥 Oui, 1 sac brûlé au salon</button>
+      <button class="save" type="button" data-gfermer>Pas encore</button>`, d => {
+      d.querySelector("[data-oui]").addEventListener("click", async ev => {
+        ev.target.disabled = true; ev.target.textContent = "Enregistrement…";
+        try { await envoiRemplissage; await envoyer({ op: "ajouter", liste: "brulages", element: { date: aujourdhui(), poele: "salon", marque: marqueParDefaut(), sacs: 1, note: "" } }); d.close(); toast("✓ Sac déclaré"); window.dispatchEvent(new Event("reservoir")); }
+        catch (err) { toast(err.message); ev.target.disabled = false; ev.target.textContent = "🔥 Oui, 1 sac brûlé au salon"; }
       });
-    } else toast(`✓ Réservoir rempli${e ? ` (${e.depuisSac}/${e.parSac} pour ce sac)` : ""}`);
-  } catch (err) { toast(err.message); }
+    });
+  } else toast(`✓ Réservoir rempli${e ? ` (${e.depuisSac}/${e.parSac} pour ce sac)` : ""}`);
+  const envoiRemplissage = relais("/reservoir", { qui: cfg.qui || "" });
+  try {
+    const j = await envoiRemplissage;
+    if (j && j.reservoir) { reservoir = j.reservoir; rendre(); window.dispatchEvent(new Event("reservoir")); }
+  } catch (err) {
+    reservoir = avant; rendre(); window.dispatchEvent(new Event("reservoir"));
+    toast(`⚠️ Remplissage non enregistré : ${err.message}`);
+  } finally { remplissageEnCours = false; }
 }
 
 /* ---------- Statistiques avancées ---------- */
